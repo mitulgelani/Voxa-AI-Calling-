@@ -144,7 +144,8 @@ function userMessage(body: ChatBody): string {
     return '[The caller has gone silent for a while. Check in briefly and naturally, like "Hello, you still there?". If you have already checked in, say a short goodbye and end with [END].]';
   }
   if (body.event === 'start') {
-    return '[The call just connected and the caller has not said anything yet. Open the call naturally in one sentence.]';
+    const disclose = body.agent?.discloseAI !== false ? ', say briefly that you are an AI assistant' : '';
+    return `[The call just connected. Open the call naturally in one or two short sentences: greet them, introduce yourself by name${disclose}, and say why you are calling.]`;
   }
   return clip(body.text || '', TURN_CHARS) || '[inaudible]';
 }

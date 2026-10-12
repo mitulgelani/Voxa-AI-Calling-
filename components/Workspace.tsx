@@ -9,7 +9,7 @@ import {
 import CallStudio from './CallStudio';
 import type { Agent, CallRecord, Contact } from '@/lib/types';
 import { MODELS, RATES, VOICES } from '@/lib/types';
-import { LANGUAGES, getLanguage } from '@/lib/languages';
+import { DEFAULT_LANGUAGE, LANGUAGES, getLanguage } from '@/lib/languages';
 import { PRESET_AGENTS, blankAgent } from '@/lib/presets';
 import { newId, useStored } from '@/lib/store';
 import { downloadText, parseContacts, toCsv } from '@/lib/contacts';
@@ -75,35 +75,16 @@ export default function Workspace() {
 
       <main className="main">
         {tab === 'playground' && agent && (
-          <div className="page">
-            <header className="page-head">
-              <div>
-                <h1>Playground</h1>
-                <p className="muted">Pick an agent and talk to it like a real call. Pause to let it answer, talk over it to interrupt.</p>
-              </div>
-            </header>
-            <div className="pickers">
-              <label>
-                <span>Agent</span>
-                <select value={agent.id} onChange={(e) => setAgentId(e.target.value)}>
-                  {agents.map((a) => (
-                    <option key={a.id} value={a.id}>{a.name}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>Calling as</span>
-                <select value={contactId} onChange={(e) => setContactId(e.target.value)}>
-                  <option value="">Yourself (no contact)</option>
-                  {contacts.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name} · {c.phone}</option>
-                  ))}
-                </select>
-              </label>
-              <button className="ghost-btn" onClick={() => setTab('agents')}>Edit agent</button>
-            </div>
-            <CallStudio key={`${agent.id}:${contactId}:${agent.updatedAt}`} agent={agent} contact={contact} onCallEnd={onCallEnd} />
-          </div>
+          <Playground
+            agents={agents}
+            agent={agent}
+            onAgent={setAgentId}
+            contacts={contacts}
+            contact={contact}
+            onContact={setContactId}
+            onCallEnd={onCallEnd}
+            onEditAgent={() => setTab('agents')}
+          />
         )}
 
         {tab === 'agents' && (
@@ -134,6 +115,187 @@ export default function Workspace() {
         ))}
       </nav>
     </div>
+  );
+}
+
+// =====================================================================================
+// Playground: language → voice → agent → who you are → call
+// =====================================================================================
+function Playground(props: {
+  agents: Agent[];
+  agent: Agent;
+  onAgent: (id: string) => void;
+  contacts: Contact[];
+  contact: Contact | null;
+  onContact: (id: string) => void;
+  onCallEnd: (r: CallRecord) => void;
+  onEditAgent: () => void;
+}) {
+  const { agents, agent, contacts, contact } = props;
+  const [langId, setLangId] = useStored<string>('voxa.play.lang', agent.language || DEFAULT_LANGUAGE);
+  const [voiceId, setVoiceId] = useStored<string>('voxa.play.voice', agent.voice);
+  const lang = getLanguage(langId);
+  const voice = lang.voices.find((v) => v.id === voiceId) || lang.voices[0];
+
+  // Agents written for this language first, then the rest (they still speak the chosen language).
+  const native = agents.filter((a) => (a.language || DEFAULT_LANGUAGE) === lang.id);
+  const others = agents.filter((a) => (a.language || DEFAULT_LANGUAGE) !== lang.id);
+
+  const changeLanguage = (id: string) => {
+    const next = getLanguage(id);
+    setLangId(next.id);
+    // Keep the agent's own voice if it speaks this language, else the first natural voice.
+    const own = next.voices.find((v) => v.id === agent.voice);
+    setVoiceId((own || next.voices[0]).id);
+    // Prefer an agent written for this language when the current one is not.
+    if ((agent.language || DEFAULT_LANGUAGE) !== next.id) {
+      const match = agents.find((a) => (a.language || DEFAULT_LANGUAGE) === next.id);
+      if (match) props.onAgent(match.id);
+    }
+  };
+
+  const changeAgent = (id: string) => {
+    props.onAgent(id);
+    const a = agents.find((x) => x.id === id);
+    if (a && lang.voices.some((v) => v.id === a.voice)) setVoiceId(a.voice);
+  };
+
+  // The call uses the chosen language and voice. The agent's fixed opening line is only used
+  // when it was written in this language; otherwise the agent opens the call itself in it.
+  const sameLanguage = (agent.language || DEFAULT_LANGUAGE) === lang.id;
+  const effective = useMemo<Agent>(
+    () => ({ ...agent, language: lang.id, voice: voice.id, greeting: sameLanguage ? agent.greeting : '' }),
+    [agent, lang.id, voice.id, sameLanguage],
+  );
+
+  return (
+    <div className="page">
+      <header className="page-head">
+        <div>
+          <h1>Playground</h1>
+          <p className="muted">Choose a language and a voice, pick who the agent is, then talk to it like a real call.</p>
+        </div>
+      </header>
+
+      <div className="card setup">
+        <div className="setup-grid">
+          <label className="setup-field">
+            <span className="step">1</span>
+            <span className="setup-label">Language</span>
+            <select id="play-lang" value={lang.id} onChange={(e) => changeLanguage(e.target.value)}>
+              <optgroup label="India">
+                {LANGUAGES.filter((l) => l.id.endsWith('-IN') || l.id === 'hinglish').map((l) => (
+                  <option key={l.id} value={l.id}>{l.label}{l.native !== 'English' && l.native !== l.label ? ` · ${l.native}` : ''}</option>
+                ))}
+              </optgroup>
+              <optgroup label="World">
+                {LANGUAGES.filter((l) => !(l.id.endsWith('-IN') || l.id === 'hinglish')).map((l) => (
+                  <option key={l.id} value={l.id}>{l.label}{l.native !== 'English' && l.native !== l.label ? ` · ${l.native}` : ''}</option>
+                ))}
+              </optgroup>
+            </select>
+          </label>
+
+          <label className="setup-field">
+            <span className="step">2</span>
+            <span className="setup-label">Voice <em className="muted">{lang.voices.length} for {lang.label}</em></span>
+            <div className="row gap">
+              <select id="play-voice" value={voice.id} onChange={(e) => setVoiceId(e.target.value)}>
+                {(['Female', 'Male'] as const).map((g) =>
+                  lang.voices.some((v) => v.group === g) ? (
+                    <optgroup key={g} label={g}>
+                      {lang.voices.filter((v) => v.group === g).map((v) => (
+                        <option key={v.id} value={v.id}>{v.label} · {v.tone}</option>
+                      ))}
+                    </optgroup>
+                  ) : null,
+                )}
+              </select>
+              <PreviewButton voice={voice.id} rate={agent.rate} text={lang.sample.replace('{name}', voice.label)} label={voice.label} />
+            </div>
+          </label>
+
+          <label className="setup-field">
+            <span className="step">3</span>
+            <span className="setup-label">Agent</span>
+            <select id="play-agent" value={agent.id} onChange={(e) => changeAgent(e.target.value)}>
+              {native.length > 0 && (
+                <optgroup label={`Made for ${lang.label}`}>
+                  {native.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </optgroup>
+              )}
+              {others.length > 0 && (
+                <optgroup label={native.length ? `Other agents (will speak ${lang.label})` : `All agents (will speak ${lang.label})`}>
+                  {others.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </optgroup>
+              )}
+            </select>
+          </label>
+
+          <label className="setup-field">
+            <span className="step">4</span>
+            <span className="setup-label">You are</span>
+            <select id="play-contact" value={contact?.id || ''} onChange={(e) => props.onContact(e.target.value)}>
+              <option value="">Yourself (no contact)</option>
+              {contacts.map((c) => (
+                <option key={c.id} value={c.id}>{c.name} · {c.phone}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="setup-foot">
+          <span className="muted small">
+            {sameLanguage
+              ? `${agent.name} will open with its saved greeting.`
+              : `${agent.name} was written in ${getLanguage(agent.language).label}; it will open the call in ${lang.label} on its own.`}
+          </span>
+          <button className="ghost-btn" onClick={props.onEditAgent}>Edit agent</button>
+        </div>
+      </div>
+
+      <CallStudio
+        key={`${agent.id}:${contact?.id || ''}:${agent.updatedAt}:${lang.id}:${voice.id}`}
+        agent={effective}
+        contact={contact}
+        onCallEnd={props.onCallEnd}
+      />
+    </div>
+  );
+}
+
+function PreviewButton({ voice, rate, text, label }: { voice: string; rate: string; text: string; label: string }) {
+  const [state, setState] = useState<'idle' | 'loading' | 'playing'>('idle');
+  const audio = useRef<HTMLAudioElement | null>(null);
+  useEffect(() => () => audio.current?.pause(), []);
+  const toggle = async (e: { preventDefault: () => void }) => {
+    e.preventDefault();
+    if (state === 'playing') {
+      audio.current?.pause();
+      setState('idle');
+      return;
+    }
+    setState('loading');
+    try {
+      const res = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ voice, rate, text }),
+      });
+      if (!res.ok) throw new Error();
+      const url = URL.createObjectURL(await res.blob());
+      if (!audio.current) audio.current = new Audio();
+      audio.current.src = url;
+      audio.current.onended = () => setState('idle');
+      await audio.current.play();
+      setState('playing');
+    } catch {
+      setState('idle');
+    }
+  };
+  return (
+    <button className="icon-btn preview" onClick={toggle} aria-label={`Hear ${label}`} title={`Hear ${label}`} disabled={state === 'loading'}>
+      {state === 'playing' ? <Pause size={16} /> : <Play size={16} />}
+    </button>
   );
 }
 

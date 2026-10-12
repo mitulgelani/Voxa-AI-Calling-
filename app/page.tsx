@@ -13,7 +13,7 @@ const HUMAN = [
 ];
 
 const STEPS = [
-  { icon: Bot, title: 'Shape a personality', text: 'Write who the agent is, how it talks and what it is trying to achieve. Pick one of six natural voices.' },
+  { icon: Bot, title: 'Shape a personality', text: 'Write who the agent is, how it talks and what it is trying to achieve. Pick its language, from Hindi and Hinglish to Tamil, Spanish or Japanese, and a native voice.' },
   { icon: Users, title: 'Paste your list', text: 'Copy rows from Excel or Google Sheets. Every column becomes something the agent knows about the person.' },
   { icon: Mic, title: 'Talk to it', text: 'Press one button and hold a real conversation. No push-to-talk, no buttons between turns.' },
 ];
@@ -29,7 +29,7 @@ export default function Landing() {
       </header>
 
       <section className="hero">
-        <div className="pill"><Volume2 size={14} /> Free speech in and out · bring your own LLM key</div>
+        <div className="pill"><Volume2 size={14} /> Free speech in and out · 27 languages incl. Hindi &amp; Hinglish</div>
         <h1>AI voice agents that<br /><span className="grad">talk like people.</span></h1>
         <p className="lead">
           Give an agent a personality, paste your contact list, and talk to it live in the browser. It answers when you

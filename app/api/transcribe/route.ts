@@ -13,10 +13,12 @@ export async function POST(req: Request) {
   if (!audio.byteLength) return Response.json({ error: 'empty body' }, { status: 400 });
   if (audio.byteLength > MAX_BYTES) return Response.json({ error: 'too large' }, { status: 413 });
 
+  const lang = new URL(req.url).searchParams.get('lang') || 'en';
+  const safeLang = /^[a-z]{2,3}$/.test(lang) ? lang : 'en';
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 45000);
   try {
-    const res = await fetch(`${sttUrl()}/transcribe`, {
+    const res = await fetch(`${sttUrl()}/transcribe?lang=${safeLang}`, {
       method: 'POST',
       body: audio,
       signal: controller.signal,

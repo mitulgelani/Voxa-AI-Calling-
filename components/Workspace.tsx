@@ -9,6 +9,7 @@ import {
 import CallStudio from './CallStudio';
 import type { Agent, CallRecord, Contact } from '@/lib/types';
 import { MODELS, RATES, VOICES } from '@/lib/types';
+import { LANGUAGES, getLanguage } from '@/lib/languages';
 import { PRESET_AGENTS, blankAgent } from '@/lib/presets';
 import { newId, useStored } from '@/lib/store';
 import { downloadText, parseContacts, toCsv } from '@/lib/contacts';
@@ -198,7 +199,7 @@ function AgentsPage(props: {
               <span className="avatar">{a.name.slice(0, 1).toUpperCase()}</span>
               <span className="agent-meta">
                 <b>{a.name}</b>
-                <small className="muted">{VOICES.find((v) => v.id === a.voice)?.label || 'Voice'} · {a.brevity === 'short' ? 'Short replies' : 'Natural replies'}</small>
+                <small className="muted">{getLanguage(a.language).label} · {VOICES.find((v) => v.id === a.voice)?.label || 'Voice'}</small>
               </span>
             </button>
           ))}
@@ -231,8 +232,23 @@ function AgentsPage(props: {
               ))}
             </div>
 
+            <Field label="Language" hint="The agent speaks, listens and thinks in this language. Write the opening line in it too.">
+              <select
+                value={getLanguage(editing.language).id}
+                onChange={(e) => {
+                  const lang = getLanguage(e.target.value);
+                  const keepVoice = lang.voices.some((v) => v.id === editing.voice);
+                  update({ language: lang.id, voice: keepVoice ? editing.voice : lang.voices[0].id });
+                }}
+              >
+                {LANGUAGES.map((l) => (
+                  <option key={l.id} value={l.id}>{l.label}{l.native !== l.label && l.native !== 'English' ? ` · ${l.native}` : ''}</option>
+                ))}
+              </select>
+            </Field>
+
             <Field label="Voice">
-              <VoicePicker value={editing.voice} rate={editing.rate} onChange={(voice) => update({ voice })} />
+              <VoicePicker value={editing.voice} rate={editing.rate} language={getLanguage(editing.language).id} onChange={(voice) => update({ voice })} />
             </Field>
 
             <div className="grid-3">
@@ -279,7 +295,8 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   );
 }
 
-function VoicePicker({ value, rate, onChange }: { value: string; rate: string; onChange: (v: string) => void }) {
+function VoicePicker({ value, rate, language, onChange }: { value: string; rate: string; language: string; onChange: (v: string) => void }) {
+  const lang = getLanguage(language);
   const [playing, setPlaying] = useState<string | null>(null);
   const audio = useRef<HTMLAudioElement | null>(null);
 
@@ -294,7 +311,7 @@ function VoicePicker({ value, rate, onChange }: { value: string; rate: string; o
       const res = await fetch('/api/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ voice: id, rate, text: `Hi, I'm ${label}. This is how I'll sound on your calls.` }),
+        body: JSON.stringify({ voice: id, rate, text: lang.sample.replace('{name}', label) }),
       });
       if (!res.ok) throw new Error();
       const url = URL.createObjectURL(await res.blob());
@@ -309,11 +326,11 @@ function VoicePicker({ value, rate, onChange }: { value: string; rate: string; o
 
   return (
     <div className="voices">
-      {(['Female', 'Male'] as const).map((group) => (
+      {(['Female', 'Male'] as const).filter((g) => lang.voices.some((v) => v.group === g)).map((group) => (
         <div key={group} className="voice-group">
           <div className="muted tiny">{group}</div>
           <div className="voice-row">
-            {VOICES.filter((v) => v.group === group).map((v) => (
+            {lang.voices.filter((v) => v.group === group).map((v) => (
               <div key={v.id} className={`voice ${value === v.id ? 'active' : ''}`}>
                 <button className="voice-pick" onClick={(e) => { e.preventDefault(); onChange(v.id); }}>
                   <b>{v.label}</b>

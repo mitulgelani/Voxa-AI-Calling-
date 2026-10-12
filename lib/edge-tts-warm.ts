@@ -13,6 +13,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import WebSocket from 'ws';
+import { voiceLocale } from './languages';
 
 export const TRUSTED_CLIENT_TOKEN = '6A5AA1D4EAFF4E9FB37E23D68491D6F4';
 export const CHROMIUM_FULL_VERSION = '143.0.3650.75';
@@ -224,7 +225,7 @@ class WarmEdgeTts {
     const socket = await this.connect();
     const requestId = uuid();
     const ssml =
-      `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'>` +
+      `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='${voiceLocale(options.voice)}'>` +
       `<voice name='${options.voice}'>` +
       `<prosody pitch='${safeProsody(options.pitch, 'Hz')}' rate='${safeProsody(options.rate, '%')}' volume='+0%'>` +
       `${escapeXml(text)}</prosody></voice></speak>`;
@@ -261,7 +262,7 @@ async function libraryFallback(text: string, options: SynthOptions): Promise<Buf
   const file = path.join(os.tmpdir(), `voxa-tts-${uuid()}.mp3`);
   const tts = new EdgeTTS({
     voice: options.voice,
-    lang: 'en-US',
+    lang: voiceLocale(options.voice),
     outputFormat: OUTPUT_FORMAT,
     rate: safeProsody(options.rate, '%'),
     pitch: safeProsody(options.pitch, 'Hz'),

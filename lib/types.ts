@@ -1,4 +1,5 @@
 // Shared types and catalogues used by both the browser and the API routes.
+import { ALL_VOICES } from './languages';
 
 export type Brevity = 'short' | 'natural';
 
@@ -11,6 +12,8 @@ export interface Agent {
   goal: string;
   /** First thing the agent says when the call connects. Supports {{variables}}. */
   greeting: string;
+  /** Language id from lib/languages (e.g. "hi-IN", "hinglish"). Missing = English (US). */
+  language?: string;
   voice: string;
   /** Edge prosody rate, e.g. "+0%". */
   rate: string;
@@ -52,14 +55,7 @@ export interface CallRecord {
   endedBy: 'agent' | 'caller' | 'error';
 }
 
-export const VOICES = [
-  { id: 'en-US-AvaNeural', label: 'Ava', group: 'Female', tone: 'warm' },
-  { id: 'en-US-EmmaNeural', label: 'Emma', group: 'Female', tone: 'cheerful' },
-  { id: 'en-US-JennyNeural', label: 'Jenny', group: 'Female', tone: 'friendly' },
-  { id: 'en-US-AndrewNeural', label: 'Andrew', group: 'Male', tone: 'confident' },
-  { id: 'en-US-BrianNeural', label: 'Brian', group: 'Male', tone: 'casual' },
-  { id: 'en-US-GuyNeural', label: 'Guy', group: 'Male', tone: 'lively' },
-] as const;
+export const VOICES = ALL_VOICES;
 
 export const VOICE_IDS: string[] = VOICES.map((v) => v.id);
 export const DEFAULT_VOICE = 'en-US-AvaNeural';

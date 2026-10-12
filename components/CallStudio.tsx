@@ -30,8 +30,9 @@ import {
 } from 'lucide-react';
 import type { Agent, CallRecord, Contact, Turn } from '@/lib/types';
 import { VOICES, contactVars, fillTemplate } from '@/lib/types';
+import { getLanguage } from '@/lib/languages';
 import {
-  cleanSpeech, endsWithQuestion, hasEndToken, isBackchannel, isEcho, soundsUnfinished, splitSentences, stripEchoPrefix, words,
+  cleanSpeech, endsWithQuestion, hasEndToken, isBackchannel, isEcho, soundsUnfinished, splitSentences, stripEchoPrefix, words, STOP_WORDS,
 } from '@/lib/speech';
 
 // ---- Tuning constants (measured; do not change casually) -------------------------
@@ -50,8 +51,7 @@ const ECHO_COOLDOWN_MS = 450; // ignore audio just after the agent stops
 const ECHO_FLOOR_MULT = 1.7; // must be this much louder than the agent's own echo
 const ECHO_FLOOR_ADD = 0.07; // plus a little, so quiet rooms behave
 const AGENT_HISTORY = 3; // compare against this many recent agent lines
-const BRIDGES = ['Mm-hmm.', 'Right.', 'Okay.', 'Sure.'];
-const STOP_WORDS = new Set(['wait', 'stop', 'hold', 'sorry', 'excuse', 'no', 'nope', 'hang', 'pardon', 'what']);
+const BRIDGES = ['Mm-hmm.', 'Right.', 'Okay.', 'Sure.']; // English defaults; each language has its own
 
 const SPEAKING_LEVEL = 0.08; // the caller is speaking
 const HEARING_LEVEL = 0.06; // meter shows "hearing you"
@@ -155,6 +155,7 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
   const phaseRef = useRef<Phase>('idle');
   const engineRef = useRef<Engine>('whisper');
   const agentRef = useRef(agent);
+  const langRef = useRef(getLanguage(agent.language));
   const contactRef = useRef(contact);
   const mutedRef = useRef(false);
   const callIdRef = useRef('');
@@ -221,6 +222,7 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
 
   useEffect(() => {
     agentRef.current = agent;
+    langRef.current = getLanguage(agent.language);
   }, [agent]);
   useEffect(() => {
     contactRef.current = contact;
@@ -263,7 +265,11 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
         if (cancelled) return;
         const ok = Boolean(d.ok);
         setWhisperOk(ok);
-        const pick: Engine = ok ? 'whisper' : getRecogniserCtor() ? 'browser' : 'whisper';
+        // Browser speech is far more accurate than Whisper "base" for Indian and most non-English
+        // languages, so prefer it there when the browser has it.
+        const english = langRef.current.whisper === 'en';
+        const hasBrowser = Boolean(getRecogniserCtor());
+        const pick: Engine = english ? (ok ? 'whisper' : hasBrowser ? 'browser' : 'whisper') : hasBrowser ? 'browser' : 'whisper';
         engineRef.current = pick;
         setEngine(pick);
       })
@@ -350,7 +356,8 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
   }, [patchLastAgentTurn]);
 
   const playBridge = useCallback(async () => {
-    const choices = BRIDGES.filter((b) => b !== lastBridgeTextRef.current);
+    const pool = langRef.current.bridges.length ? langRef.current.bridges : BRIDGES;
+    const choices = pool.filter((b) => b !== lastBridgeTextRef.current);
     const text = choices[Math.floor(Math.random() * choices.length)];
     const blob = bridgeCacheRef.current.get(text);
     const el = bridgeAudioRef.current;
@@ -448,7 +455,7 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
       rec.continuous = true;
       rec.interimResults = true;
       rec.maxAlternatives = 1;
-      rec.lang = 'en-US';
+      rec.lang = langRef.current.speech;
       recogRef.current = rec;
     }
     rec.onstart = () => {
@@ -668,7 +675,7 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
         if (end) hangUpRef.current('agent');
         else if (event === 'reply') {
           // Never leave dead air: a short honest recovery line.
-          await speakLines(["Sorry, give me one second, could you say that again?"], token, { recordTurn: true });
+          await speakLines([langRef.current.sorry], token, { recordTurn: true });
         }
         return;
       }
@@ -782,7 +789,7 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
     if (!heldRef.current) setPhaseBoth('thinking');
     const t0 = performance.now();
     try {
-      const res = await fetch('/api/transcribe', {
+      const res = await fetch(`/api/transcribe?lang=${langRef.current.whisper}`, {
         method: 'POST',
         headers: { 'Content-Type': blob.type || 'application/octet-stream' },
         body: blob,
@@ -1073,7 +1080,7 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
   // Call lifecycle
   // ================================================================================
   const prefetchBridges = useCallback(async () => {
-    for (const b of BRIDGES) {
+    for (const b of langRef.current.bridges.length ? langRef.current.bridges : BRIDGES) {
       if (bridgeCacheRef.current.has(b)) continue;
       const blob = await fetchTts(b);
       if (blob) bridgeCacheRef.current.set(b, blob);
@@ -1237,7 +1244,7 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
             <div className="eyebrow">{contact ? `Calling ${contact.name}` : 'Playground call'}</div>
             <h2 className="stage-title">{agent.name}</h2>
             <div className="muted small">
-              {voice ? `${voice.label} · ${voice.tone}` : agent.voice}
+              {getLanguage(agent.language).label} · {voice ? `${voice.label}, ${voice.tone}` : agent.voice}
             </div>
           </div>
           <div className="clock">{inCall ? formatClock(elapsed) : '00:00'}</div>

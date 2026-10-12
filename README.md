@@ -18,6 +18,17 @@ Build an AI caller with its own personality, paste your contact list from Excel,
 
 Data is stored in the browser (localStorage) for v1.
 
+## Languages
+
+27 options, each with free native Edge neural voices, set per agent:
+
+- **India:** Hindi, Hinglish (Hindi + English mixed, the way people actually talk), Gujarati, Marathi, Tamil, Telugu, Bengali, Kannada, Malayalam, Urdu, Indian English
+- **World:** English (US/UK), Spanish (Spain/Mexico), French, German, Portuguese (Brazil), Italian, Arabic, Russian, Turkish, Indonesian, Japanese, Mandarin, Korean, Dutch
+
+The language drives everything: the voice, the model's replies (native script), the listening engine, bridge sounds ("हम्म।", "अच्छा।"), the fallback line, and the interruption and nod detection ("ruko", "haan ji").
+
+**Listening in non-English languages:** Whisper `base` is weak for Hindi and Indian languages, so those agents default to the browser engine (Google's recogniser in Chrome/Edge), which is faster and more accurate for them. To use Whisper for them, set `STT_MODEL=small` (about 3x slower on CPU, much better) and test on real recordings first.
+
 ## How it stays human
 
 All in `components/CallStudio.tsx`:

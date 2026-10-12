@@ -7,7 +7,7 @@ function preset(p: Omit<Agent, 'createdAt' | 'updatedAt' | 'model' | 'rate'> & P
   return { model: DEFAULT_MODEL, rate: '+0%', createdAt: now, updatedAt: now, ...p };
 }
 
-export const PRESET_AGENTS: Agent[] = [
+export const PRESET_AGENTS_EN: Agent[] = [
   preset({
     id: 'preset-maya',
     name: 'Maya',
@@ -55,6 +55,33 @@ export const PRESET_AGENTS: Agent[] = [
   }),
 ];
 
+export const LANGUAGE_PRESETS: Agent[] = [
+  preset({
+    id: 'preset-priya',
+    name: 'Priya',
+    language: 'hinglish',
+    persona:
+      'You are Priya, a warm and cheerful customer care assistant from a fictional online store. You talk like a friendly young professional from Mumbai, mixing Hindi and English naturally, patient with older callers.',
+    goal: '{{name}} ka order delivery ke liye confirm karna, aur agar koi problem hai toh samajhna.',
+    greeting: 'Hi {{first_name}}, मैं Priya बोल रही हूँ, एक AI assistant, आपके order के बारे में call किया था. अभी दो मिनट बात कर सकते हैं?',
+    voice: 'hi-IN-SwaraNeural',
+    brevity: 'short',
+    discloseAI: true,
+  }),
+  preset({
+    id: 'preset-madhur',
+    name: 'Madhur',
+    language: 'hi-IN',
+    persona:
+      'You are Madhur, a calm, respectful assistant who confirms doctor appointments. You speak simple, polite Hindi and always repeat dates and times clearly.',
+    goal: '{{date}} को {{time}} बजे की appointment confirm करना, या इस हफ़्ते का नया समय तय करना।',
+    greeting: 'नमस्ते {{first_name}} जी, मैं Madhur, एक AI सहायक, आपकी आने वाली appointment के बारे में बात करना चाहता था। क्या अभी एक मिनट है?',
+    voice: 'hi-IN-MadhurNeural',
+    brevity: 'short',
+    discloseAI: true,
+  }),
+];
+
 export function blankAgent(id: string): Agent {
   const t = Date.now();
   return {
@@ -64,6 +91,7 @@ export function blankAgent(id: string): Agent {
     goal: '',
     greeting: "Hi {{first_name}}, I'm an AI assistant. Do you have a quick minute?",
     voice: 'en-US-EmmaNeural',
+    language: 'en-US',
     rate: '+0%',
     model: DEFAULT_MODEL,
     brevity: 'short',
@@ -72,3 +100,5 @@ export function blankAgent(id: string): Agent {
     updatedAt: t,
   };
 }
+
+export const PRESET_AGENTS: Agent[] = [...PRESET_AGENTS_EN, ...LANGUAGE_PRESETS];

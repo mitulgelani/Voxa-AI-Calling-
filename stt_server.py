@@ -10,9 +10,11 @@ import os
 import subprocess
 import tempfile
 import threading
+import re
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 import numpy as np
 from faster_whisper import WhisperModel
@@ -76,7 +78,7 @@ def _decode_with_ffmpeg(raw: bytes):
     return np.frombuffer(proc.stdout, dtype=np.int16).astype(np.float32) / 32768.0
 
 
-def transcribe(raw: bytes) -> dict:
+def transcribe(raw: bytes, language: str = "en") -> dict:
     started = time.time()
     audio = _decode_in_process(raw)
     if audio is None:
@@ -87,7 +89,7 @@ def transcribe(raw: bytes) -> dict:
         # Pass the array, never a filename (bundled PyAV mismatch crashes on some installs).
         segments, _info = MODEL.transcribe(
             audio,
-            language="en",
+            language=language,
             beam_size=1,
             vad_filter=True,
             condition_on_previous_text=False,
@@ -122,7 +124,8 @@ class Handler(BaseHTTPRequestHandler):
         if TOKEN and self.headers.get("Authorization", "") != f"Bearer {TOKEN}":
             self._json(401, {"error": "unauthorized"})
             return
-        if self.path.rstrip("/") != "/transcribe":
+        url = urlparse(self.path)
+        if url.path.rstrip("/") != "/transcribe":
             self._json(404, {"error": "not found"})
             return
         length = int(self.headers.get("Content-Length") or 0)
@@ -134,7 +137,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         raw = self.rfile.read(length)
         try:
-            self._json(200, transcribe(raw))
+            lang = (parse_qs(url.query).get("lang") or ["en"])[0]
+            if not re.fullmatch(r"[a-z]{2,3}", lang):
+                lang = "en"
+            self._json(200, transcribe(raw, lang))
         except Exception as error:  # noqa: BLE001
             print(f"[stt] transcribe failed: {error}", flush=True)
             self._json(500, {"error": "transcribe failed"})

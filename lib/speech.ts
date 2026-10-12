@@ -27,7 +27,7 @@ export function hasEndToken(text: string): boolean {
 
 /** Split into sentences so the first one can start playing while the next synthesises. */
 export function splitSentences(text: string): string[] {
-  const parts = text.match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g) || [];
+  const parts = text.match(/[^.!?।。！？]+[.!?।。！？]+["')\]]*\s*|[^.!?।。！？]+$/g) || [];
   const out: string[] = [];
   for (const raw of parts) {
     const s = raw.trim();
@@ -39,18 +39,34 @@ export function splitSentences(text: string): string[] {
   return out;
 }
 
+const CJK = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/;
+
+/** Words in any script. Chinese/Japanese have no spaces, so each pair of characters counts as a word. */
 export function words(text: string): string[] {
-  return String(text || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9'\s-]/g, ' ')
-    .split(/\s+/)
-    .filter(Boolean);
+  const t = String(text || '').toLowerCase();
+  const out: string[] = [];
+  for (const token of t.replace(/[^\p{L}\p{M}\p{N}'\s-]/gu, ' ').split(/\s+/)) {
+    if (!token) continue;
+    if (CJK.test(token) && !/[\uac00-\ud7af]/.test(token)) {
+      for (let i = 0; i < token.length; i += 2) out.push(token.slice(i, i + 2));
+    } else out.push(token);
+  }
+  return out;
 }
 
 const BACKCHANNEL = new Set([
   'ok', 'okay', 'k', 'mm', 'mhm', 'mmhmm', 'mm-hmm', 'mm-hm', 'uh-huh', 'uhhuh', 'uh', 'huh', 'um', 'hmm', 'hm',
   'yeah', 'yep', 'yup', 'yes', 'ya', 'right', 'sure', 'alright', 'all', 'got', 'it', 'i', 'see', 'cool', 'nice',
   'great', 'oh', 'ah', 'aha', 'true', 'exactly', 'fine', 'good',
+  // Hindi / Hinglish / Urdu
+  'haan', 'han', 'haa', 'ha', 'haanji', 'ji', 'accha', 'achha', 'acha', 'theek', 'thik', 'hai', 'sahi',
+  'हाँ', 'हां', 'हा', 'जी', 'हाँजी', 'अच्छा', 'ठीक', 'है', 'हम्म', 'हम', 'ओके', 'सही', 'जी हाँ',
+  'ہاں', 'جی', 'اچھا', 'ٹھیک',
+  // Indian languages
+  'હા', 'સારું', 'બરાબર', 'हो', 'बरं', 'சரி', 'ஆமா', 'సరే', 'అవును', 'আচ্ছা', 'হ্যাঁ', 'ಸರಿ', 'ಹೌದು', 'ശരി', 'അതെ',
+  // European and others
+  'sí', 'si', 'vale', 'claro', 'ajá', 'oui', "d'accord", 'ja', 'genau', 'sim', 'certo', 'tá', 'uhum', 'evet', 'tamam',
+  'iya', 'oke', 'да', 'угу', 'так', 'نعم', 'تمام', 'طيب', 'はい', 'ええ', 'うん', '嗯', '好的', '네', '음',
 ]);
 
 /** "okay", "mm-hmm", "yeah right", "got it" — a nod, not a turn. */
@@ -63,6 +79,16 @@ export function isBackchannel(text: string): boolean {
 const CONTINUATIONS = new Set([
   'and', 'but', 'so', 'or', 'because', 'cause', 'um', 'uh', 'like', 'the', 'a', 'an', 'to', 'if', 'then', 'with',
   'my', 'i', "i'm", 'is', 'was', 'that', 'which', 'when', 'for', 'of', 'about', 'actually', 'basically',
+  'aur', 'lekin', 'toh', 'to', 'ki', 'kyunki', 'matlab', 'jaise', 'agar', 'mera', 'meri',
+  'और', 'लेकिन', 'तो', 'कि', 'क्योंकि', 'मतलब', 'जैसे', 'अगर', 'मेरा', 'मेरी', 'या', 'पर',
+  'y', 'pero', 'porque', 'et', 'mais', 'parce', 'und', 'aber', 'weil', 'e', 'mas', 'porque',
+]);
+
+/** Words that stop the agent even when the interruption is short ("wait", "ruko"). */
+export const STOP_WORDS = new Set([
+  'wait', 'stop', 'hold', 'sorry', 'excuse', 'no', 'nope', 'hang', 'pardon', 'what',
+  'ruko', 'ruk', 'suno', 'nahi', 'nahin', 'arre', 'रुको', 'रुकिए', 'सुनो', 'सुनिए', 'नहीं', 'अरे', 'एक',
+  'espera', 'para', 'attendez', 'non', 'warte', 'nein', 'espere', 'não', 'momento',
 ]);
 
 /** The caller trailed off mid-thought ("I wanted to ask about the..."). Give them a moment. */

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getLanguage } from '@/lib/languages';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -47,6 +48,7 @@ interface AgentInput {
   goal?: string;
   brevity?: 'short' | 'natural';
   discloseAI?: boolean;
+  language?: string;
 }
 interface ChatBody {
   text?: string;
@@ -89,6 +91,7 @@ function buildSystemPrompt(body: ChatBody): string {
   const name = clip(agent.name || '', 60);
   const goal = clip(agent.goal || '', 600);
   const short = agent.brevity !== 'natural';
+  const lang = getLanguage(agent.language);
 
   const contactLines = Object.entries(body.contact || {})
     .filter(([k, v]) => k && v)
@@ -104,8 +107,9 @@ function buildSystemPrompt(body: ChatBody): string {
     contactLines ? `What you know about the person you are talking to: ${contactLines}.` : '',
     '',
     'This is a live spoken phone call, not a chat. Talk like a real person on the phone.',
+    `- Language: reply only in ${lang.label}. ${lang.style} If the caller clearly switches to another language, follow them.`,
     short
-      ? '- Reply with ONE short spoken sentence, under 20 words. Hard limit.'
+      ? '- Reply with ONE short spoken sentence, under 20 words (or about 40 characters in Chinese, Japanese or Korean). Hard limit.'
       : '- Reply with one or two short spoken sentences, under 35 words total. Hard limit.',
     '- Ask at most one question per reply.',
     '- Use contractions and everyday words. React to what they just said before moving on. Mirror their energy.',

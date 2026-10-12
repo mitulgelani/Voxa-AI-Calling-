@@ -297,3 +297,76 @@ export function voiceLocale(voiceId: string): string {
   const m = /^([a-z]{2,3}-[A-Z]{2})-/.exec(voiceId);
   return m ? m[1] : 'en-US';
 }
+
+// Unicode ranges for each language's own script. Languages written in Latin letters are absent.
+const SCRIPTS: Record<string, RegExp> = {
+  'hi-IN': /[ऀ-ॿ]/g,
+  hinglish: /[ऀ-ॿ]/g,
+  'mr-IN': /[ऀ-ॿ]/g,
+  'gu-IN': /[઀-૿]/g,
+  'ta-IN': /[஀-௿]/g,
+  'te-IN': /[ఀ-౿]/g,
+  'bn-IN': /[ঀ-৿]/g,
+  'kn-IN': /[ಀ-೿]/g,
+  'ml-IN': /[ഀ-ൿ]/g,
+  'ur-IN': /[؀-ۿ]/g,
+  'ar-SA': /[؀-ۿ]/g,
+  'ru-RU': /[Ѐ-ӿ]/g,
+  'ja-JP': /[぀-ヿ一-鿿]/g,
+  'zh-CN': /[一-鿿]/g,
+  'ko-KR': /[가-힯]/g,
+};
+
+function letterCount(text: string): number {
+  return (text.match(/\p{L}/gu) || []).length;
+}
+
+/**
+ * Whether a reply is written in the language's own script. Hinglish may carry English words,
+ * so it needs less; Latin-script languages must be mostly Latin letters.
+ */
+export function matchesScript(text: string, languageId: string): boolean {
+  const clean = String(text || '').replace(/\[[^\]]*\]/g, '');
+  const total = letterCount(clean);
+  if (total < 4) return true;
+  const re = SCRIPTS[languageId];
+  if (re) {
+    const own = (clean.match(re) || []).length;
+    return own / total >= (languageId === 'hinglish' ? 0.35 : 0.6);
+  }
+  const latin = (clean.match(/[A-Za-zÀ-ɏ]/g) || []).length;
+  return latin / total >= 0.8;
+}
+
+/** "[LANG:en-IN]" or "[LANG:English]" → the language, if it is one we support. */
+export function parseLanguageTag(text: string): Language | null {
+  const m = /\[LANG:\s*([^\]]+?)\s*\]/i.exec(String(text || ''));
+  if (!m) return null;
+  const key = m[1].toLowerCase();
+  return (
+    LANGUAGES.find((l) => l.id.toLowerCase() === key) ||
+    LANGUAGES.find((l) => l.label.toLowerCase() === key) ||
+    LANGUAGES.find((l) => l.label.toLowerCase().startsWith(key)) ||
+    null
+  );
+}
+
+/**
+ * Guess the caller's language from the script of what they said, compared with the call
+ * language. Returns a label like "English" only when it clearly differs, else ''.
+ */
+export function guessCallerLanguage(text: string, callLanguageId: string): string {
+  const t = String(text || '');
+  const total = letterCount(t);
+  if (total < 8) return '';
+  for (const [id, re] of Object.entries(SCRIPTS)) {
+    const n = (t.match(re) || []).length;
+    if (n / total >= 0.6) {
+      const same = SCRIPTS[callLanguageId] && SCRIPTS[callLanguageId].source === re.source;
+      return same ? '' : getLanguage(id === 'hinglish' ? 'hi-IN' : id).label;
+    }
+  }
+  const latin = (t.match(/[A-Za-z]/g) || []).length;
+  if (latin / total >= 0.8 && SCRIPTS[callLanguageId]) return callLanguageId === 'hinglish' ? '' : 'English';
+  return '';
+}

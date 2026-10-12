@@ -6,7 +6,7 @@ Build an AI caller with its own personality, paste your contact list from Excel,
 - **Voice in:** local Whisper (faster-whisper `base`, CPU) or the browser's built-in recogniser
 - **Brain:** OpenRouter (default, Gemini 2.5 Flash) with KIE as automatic fallback
 
-## What's in v1
+## What's in it
 
 | Area | What it does |
 |---|---|
@@ -27,22 +27,24 @@ Data is stored in the browser (localStorage) for v1.
 
 The language drives everything: the voice, the model's replies (native script), the listening engine, bridge sounds ("हम्म।", "अच्छा।"), the fallback line, and the interruption and nod detection ("ruko", "haan ji").
 
-**Listening in non-English languages:** Whisper `base` is weak for Hindi and Indian languages, so those agents default to the browser engine (Google's recogniser in Chrome/Edge), which is faster and more accurate for them. To use Whisper for them, set `STT_MODEL=small` (about 3x slower on CPU, much better) and test on real recordings first.
+**Strict language, switchable by voice.** The agent only speaks the selected language; if a reply comes back in the wrong language or script it is rewritten before it is spoken. If the caller speaks a full sentence in another language or asks ("English mein baat karo"), the agent switches: new voice of the same gender, new listening language, and it carries on.
+
+**Listening engine (auto):** phones use Whisper (silent; Android's browser recogniser beeps on every restart and fights the mic). Desktop Chrome/Edge/Safari use the browser recogniser (silent there, live words, most accurate). Whisper uses `base` for English and `small` for Hindi and other languages (`STT_MODEL_MULTI`), and filters the phrases Whisper invents on silence ("Thank you.", "धन्यवाद").
 
 ## How it stays human
 
 All in `components/CallStudio.tsx`:
 
-- Ends your turn after 650ms of silence, waits ~1.3s when you trail off ("so I was wondering if…")
-- Pauses the moment you talk over it, then decides from your words: a real interruption (stops and answers) or a nod / cough (resumes). "Wait", "stop", "sorry" interrupt even when short
-- Remembers only what it actually said before being cut off, so it answers you instead of finishing its old sentence
-- If you keep talking while it is thinking, it drops the pending reply and merges both halves into one turn
-- Short bridges ("Right.") only when a substantive reply is slow, never twice in a row
-- Echo protection three ways: louder-than-echo gate, 450ms cooldown, and comparing your words with its recent lines
-- Checks in after 9s of silence, hangs up politely after the second check-in
-- Says goodbye and ends the call itself when the conversation is done
-- Watchdog every 7s re-acquires a dead mic, restarts the recogniser, resumes a suspended audio context
-- Auto-switches engines if Whisper goes down or the browser recogniser hears sound but no words
+- **The caller has priority.** Talk over the agent and it pauses within ~0.3s. Keep talking past ~0.9s, or say "wait / ruko / stop", and it drops the rest of its sentence and listens. A quick "haan" or "mm-hmm" lets it carry on.
+- **It never starts talking over you.** Before every reply it waits until you have been quiet for 0.3s; if you start again, the reply is thrown away.
+- If you keep talking while it is thinking, it drops the pending reply and merges both halves into one turn.
+- Ends your turn after 650ms of silence, waits ~1.3s when you trail off ("so I was wondering if…", "मतलब…").
+- Mic threshold adapts to room noise, so quiet voices are heard and fans or traffic are not.
+- Remembers only what it actually said before being cut off, so it answers you instead of finishing its old sentence.
+- Short bridges ("Right.", "अच्छा।") only when a substantive reply is slow, never twice in a row.
+- Echo protection three ways: louder-than-echo gate, 450ms cooldown, and comparing your words with its recent lines.
+- Checks in after 9s of silence, hangs up politely after the second check-in, and ends the call itself after saying goodbye.
+- Watchdog every 7s re-acquires a dead mic and restarts listening.
 
 ## Run it (single Linux box)
 

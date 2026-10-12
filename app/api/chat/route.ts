@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getLanguage } from '@/lib/languages';
+import { LANGUAGES, getLanguage, matchesScript, parseLanguageTag } from '@/lib/languages';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -59,6 +59,8 @@ interface ChatBody {
   model?: string;
   /** 'reply' (default) | 'silence' — the caller has gone quiet. */
   event?: string;
+  /** Client's guess at the caller's language, from Whisper detection or the script of the words. */
+  callerLanguage?: string;
 }
 
 function resolveRoute(id: string | undefined): Route {
@@ -103,26 +105,31 @@ function buildSystemPrompt(body: ChatBody): string {
     name ? `Your name is ${name}.` : '',
     persona,
     goal ? `Goal of this call: ${goal}` : '',
-    agent.discloseAI !== false ? 'You are openly an AI voice assistant; you already said so in your greeting.' : '',
+    agent.discloseAI !== false ? 'You are openly an AI voice assistant and said so when the call started.' : '',
     contactLines ? `What you know about the person you are talking to: ${contactLines}.` : '',
     '',
+    `LANGUAGE (most important rule): speak ONLY ${lang.label}. ${lang.style} Every reply must be in ${lang.label}, even though these instructions, the persona and the notes are written in English. Never answer in English unless the call language is English or the caller switched to English.`,
+    `LANGUAGE SWITCH: if the caller speaks a full sentence in another language, or asks you to talk in another language, switch to it from this reply on and begin your reply with [LANG:code], using one of: ${LANGUAGES.map((l) => `${l.id} (${l.label})`).join(', ')}. Indian callers speaking English → en-IN; mixing Hindi and English → hinglish. A few English words inside a Hindi sentence (okay, order, time, problem) are NOT a switch. If you cannot tell which language they prefer, ask in one short question which language is comfortable for them.`,
+    '',
     'This is a live spoken phone call, not a chat. Talk like a real person on the phone.',
-    `- Language: reply only in ${lang.label}. ${lang.style} If the caller clearly switches to another language, follow them.`,
     short
       ? '- Reply with ONE short spoken sentence, under 20 words (or about 40 characters in Chinese, Japanese or Korean). Hard limit.'
       : '- Reply with one or two short spoken sentences, under 35 words total. Hard limit.',
-    '- Ask at most one question per reply.',
-    '- Use contractions and everyday words. React to what they just said before moving on. Mirror their energy.',
-    '- A light natural opener like "oh", "ah", "got it" or "hmm" is fine sometimes, never every reply.',
+    '- Ask at most one question per reply, then stop and let them talk.',
+    '- React to what they just said before moving on. Mirror their energy and pace. Use everyday spoken words, not written language.',
+    '- A light natural opener ("oh", "got it", "accha", "hmm") is fine sometimes, never every reply.',
     '- Plain spoken words only. No lists, no markdown, no emoji, no stage directions.',
-    '- Never repeat a greeting. You already introduced yourself.',
-    '- If the caller only acknowledges with "okay", "yeah" or "mm-hmm", keep the call moving, do not start a new topic.',
-    '- If what they said is garbled or makes no sense, say you did not catch that and ask them to repeat it.',
-    '- If they say they are busy, ask for a better time or wrap up politely.',
+    '- Never repeat a greeting or re-introduce yourself.',
+    '- If they only acknowledge ("okay", "haan", "mm-hmm"), keep the call moving without starting a new topic.',
+    '- If what they said is garbled, half-heard or makes no sense, say you did not catch that and ask them to repeat. Never guess wildly.',
+    '- If they interrupted you (a line ending "(cut off)"), drop what you were saying and answer them directly. Do not repeat the cut-off sentence.',
+    '- If they sound annoyed or confused, slow down, apologise briefly, and make it simpler.',
+    '- If they say they are busy or driving, offer to call back later and wrap up.',
     '- If they ask whether you are a human or an AI, answer honestly that you are an AI assistant.',
     '- Never ask for card numbers, passwords, one time codes, PINs or identity documents.',
-    '- If a line in the history ends with "(cut off)", they interrupted you there; respond to what they said, do not finish the old sentence.',
-    '- When the conversation is clearly finished and you have said goodbye, end your reply with the token [END].',
+    '- When the conversation is finished and you have said goodbye, end your reply with [END].',
+    '',
+    `Remember: reply in ${lang.label}.`,
   ];
   return lines.filter(Boolean).join('\n').trim();
 }
@@ -140,14 +147,16 @@ function normaliseHistory(history: HistoryItem[] | undefined) {
 }
 
 function userMessage(body: ChatBody): string {
+  const lang = getLanguage(body.agent?.language);
+  const reminder = `\n(Reply in ${lang.label}.${body.callerLanguage ? ` The caller's words look like ${clip(body.callerLanguage, 30)}.` : ''})`;
   if (body.event === 'silence') {
-    return '[The caller has gone silent for a while. Check in briefly and naturally, like "Hello, you still there?". If you have already checked in, say a short goodbye and end with [END].]';
+    return `[The caller has gone silent for a while. Check in briefly and naturally in ${lang.label}, like "Hello, are you still there?". If you have already checked in, say a short goodbye and end with [END].]`;
   }
   if (body.event === 'start') {
     const disclose = body.agent?.discloseAI !== false ? ', say briefly that you are an AI assistant' : '';
-    return `[The call just connected. Open the call naturally in one or two short sentences: greet them, introduce yourself by name${disclose}, and say why you are calling.]`;
+    return `[The call just connected. Open the call naturally in one or two short sentences in ${lang.label}: greet them, introduce yourself by name${disclose}, and say why you are calling.]`;
   }
-  return clip(body.text || '', TURN_CHARS) || '[inaudible]';
+  return (clip(body.text || '', TURN_CHARS) || '[inaudible]') + reminder;
 }
 
 async function callOpenRouter(model: string, system: string, history: ReturnType<typeof normaliseHistory>, text: string) {
@@ -271,9 +280,32 @@ export async function POST(req: Request) {
   const started = Date.now();
   for (const r of [route, fallback]) {
     try {
-      const reply = await attempt(r, system, history, text);
+      let reply = await attempt(r, system, history, text);
       if (reply) {
-        return NextResponse.json({ reply, model: `${r.provider}:${r.model}`, ms: Date.now() - started });
+        // The model may switch language on the caller's request: [LANG:en-IN].
+        const switched = parseLanguageTag(reply);
+        const target = switched || getLanguage(body.agent?.language);
+        reply = reply.replace(/\[LANG:[^\]]*\]/gi, '').trim();
+        // Language lock: if the reply came back in the wrong language or script, rewrite it once.
+        if (reply && !matchesScript(reply, target.id)) {
+          try {
+            const fixed = await attempt(
+              r,
+              `Rewrite the user's line as natural spoken ${target.label}. ${target.style} Keep the meaning, keep it short, keep any [END] token. Output only the rewritten line.`,
+              [],
+              reply,
+            );
+            if (fixed && matchesScript(fixed, target.id)) reply = fixed.trim();
+          } catch {
+            /* keep the original */
+          }
+        }
+        return NextResponse.json({
+          reply,
+          model: `${r.provider}:${r.model}`,
+          language: switched ? switched.id : undefined,
+          ms: Date.now() - started,
+        });
       }
     } catch (error) {
       console.warn(`[chat] ${r.provider}:${r.model} failed: ${(error as Error).message}`);

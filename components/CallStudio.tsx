@@ -30,7 +30,7 @@ import {
 } from 'lucide-react';
 import type { Agent, CallRecord, Contact, Turn } from '@/lib/types';
 import { VOICES, contactVars, fillTemplate } from '@/lib/types';
-import { getLanguage } from '@/lib/languages';
+import { LANGUAGES, getLanguage, guessCallerLanguage } from '@/lib/languages';
 import {
   cleanSpeech, endsWithQuestion, hasEndToken, isBackchannel, isEcho, soundsUnfinished, splitSentences, stripEchoPrefix, words, STOP_WORDS,
 } from '@/lib/speech';
@@ -44,7 +44,7 @@ const FILLER_DELAY_MS = 420; // fallback bridge delay once the model call has st
 const RESTART_DELAY_MS = 400; // gap before restarting the browser recogniser
 const WATCHDOG_MS = 7000; // how often to verify the mic is alive
 const BACKCHANNEL_WINDOW_MS = 6000; // window in which "okay" is a nod, not a reply
-const BARGE_IN_WORDS = 3; // words needed to interrupt
+const BARGE_IN_WORDS = 2; // words needed to interrupt (stop words like "wait"/"ruko" need just one)
 const BARGE_SUSTAIN_MS = 320; // an interruption must last this long
 const SPEAK_GRACE_MS = 450; // no interruption accepted at the very start of a reply
 const ECHO_COOLDOWN_MS = 450; // ignore audio just after the agent stops
@@ -53,7 +53,11 @@ const ECHO_FLOOR_ADD = 0.07; // plus a little, so quiet rooms behave
 const AGENT_HISTORY = 3; // compare against this many recent agent lines
 const BRIDGES = ['Mm-hmm.', 'Right.', 'Okay.', 'Sure.']; // English defaults; each language has its own
 
-const SPEAKING_LEVEL = 0.08; // the caller is speaking
+const SPEAKING_LEVEL = 0.08; // the caller is speaking (quiet-room value; adapts to room noise)
+const MIN_SPEAKING_LEVEL = 0.05;
+const MAX_SPEAKING_LEVEL = 0.18;
+const COMMIT_INTERRUPT_MS = 900; // talking over the agent this long is a real interruption, not a nod
+const QUIET_BEFORE_SPEAKING_MS = 300; // never start a reply while the caller is still making sound
 const HEARING_LEVEL = 0.06; // meter shows "hearing you"
 const SOUND_LEVEL = 0.05; // sound present, keep the recorder
 const UNFINISHED_ENDPOINT_MS = 1300; // longer pause allowed when the caller trails off
@@ -109,6 +113,12 @@ function getRecogniserCtor(): (new () => Recogniser) | null {
   return w.SpeechRecognition || w.webkitSpeechRecognition || null;
 }
 
+function isMobileDevice(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+}
+
 function pickMime(): string {
   if (typeof MediaRecorder === 'undefined') return '';
   const options = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/ogg'];
@@ -141,6 +151,7 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
   const [engine, setEngine] = useState<Engine>('whisper');
   const [whisperOk, setWhisperOk] = useState<boolean | null>(null);
   const [browserSupported, setBrowserSupported] = useState(false);
+  const [mobile, setMobile] = useState(false);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [live, setLive] = useState(''); // interim words while the caller speaks
   const [level, setLevel] = useState(0);
@@ -156,6 +167,11 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
   const engineRef = useRef<Engine>('whisper');
   const agentRef = useRef(agent);
   const langRef = useRef(getLanguage(agent.language));
+  const voiceRef = useRef(agent.voice); // can change mid-call when the caller switches language
+  const [liveLang, setLiveLang] = useState(getLanguage(agent.language));
+  const callerLangRef = useRef(''); // hint for the model: the caller seems to be speaking this
+  const noiseFloorRef = useRef(0.02); // room noise while nobody talks
+  const lastHeardAtRef = useRef(0); // last time the caller made a speech-level sound
   const contactRef = useRef(contact);
   const mutedRef = useRef(false);
   const callIdRef = useRef('');
@@ -223,6 +239,8 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
   useEffect(() => {
     agentRef.current = agent;
     langRef.current = getLanguage(agent.language);
+    voiceRef.current = agent.voice;
+    setLiveLang(langRef.current);
   }, [agent]);
   useEffect(() => {
     contactRef.current = contact;
@@ -258,6 +276,7 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
   // ---- Health checks on mount ----
   useEffect(() => {
     setBrowserSupported(Boolean(getRecogniserCtor()));
+    setMobile(isMobileDevice());
     let cancelled = false;
     fetch('/api/transcribe', { cache: 'no-store' })
       .then((r) => r.json())
@@ -265,11 +284,11 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
         if (cancelled) return;
         const ok = Boolean(d.ok);
         setWhisperOk(ok);
-        // Browser speech is far more accurate than Whisper "base" for Indian and most non-English
-        // languages, so prefer it there when the browser has it.
-        const english = langRef.current.whisper === 'en';
+        // Auto pick. Phones: Whisper, because Android's browser recogniser beeps on every
+        // start/stop and fights getUserMedia for the mic. Desktop Chrome/Edge/Safari: the
+        // browser recogniser, which is silent there, streams words live and is the most accurate.
         const hasBrowser = Boolean(getRecogniserCtor());
-        const pick: Engine = english ? (ok ? 'whisper' : hasBrowser ? 'browser' : 'whisper') : hasBrowser ? 'browser' : 'whisper';
+        const pick: Engine = isMobileDevice() ? (ok ? 'whisper' : hasBrowser ? 'browser' : 'whisper') : hasBrowser ? 'browser' : 'whisper';
         engineRef.current = pick;
         setEngine(pick);
       })
@@ -292,7 +311,7 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
       const res = await fetch('/api/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, voice: agentRef.current.voice, rate: agentRef.current.rate }),
+        body: JSON.stringify({ text, voice: voiceRef.current, rate: agentRef.current.rate }),
       });
       if (!res.ok) throw new Error(`tts ${res.status}`);
       const blob = await res.blob();
@@ -531,6 +550,45 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
     recogLenRef.current = 0;
   }, []);
 
+  /**
+   * The caller asked for (or simply started speaking) another language. Switch voice (same
+   * gender), listening language and bridge sounds without dropping the call.
+   */
+  const switchLanguage = useCallback(
+    (id: string) => {
+      const next = getLanguage(id);
+      if (next.id === langRef.current.id) return;
+      const currentVoice = next.voices.find((v) => v.id === voiceRef.current);
+      const gender = LANGUAGES.flatMap((l) => l.voices).find((v) => v.id === voiceRef.current)?.group || 'Female';
+      const voice = currentVoice || next.voices.find((v) => v.group === gender) || next.voices[0];
+      langRef.current = next;
+      voiceRef.current = voice.id;
+      setLiveLang(next);
+      setNotice(`Switched to ${next.label}.`);
+      bridgeCacheRef.current.clear();
+      if (engineRef.current === 'browser' && activeRef.current) {
+        stopRecogniser();
+        startRecogniser();
+      }
+      void (async () => {
+        for (const b of next.bridges) {
+          const blob = await fetchTts(b);
+          if (blob && langRef.current.id === next.id) bridgeCacheRef.current.set(b, blob);
+        }
+      })();
+    },
+    [fetchTts, startRecogniser, stopRecogniser],
+  );
+
+  /** Wait until the caller has been quiet briefly, so the agent never starts talking over them. */
+  const waitForQuiet = useCallback(async (token: number) => {
+    const until = performance.now() + 1500;
+    while (performance.now() < until && token === turnTokenRef.current && activeRef.current) {
+      if (performance.now() - lastHeardAtRef.current >= QUIET_BEFORE_SPEAKING_MS && !speechStartedRef.current) return;
+      await new Promise((r) => window.setTimeout(r, 40));
+    }
+  }, []);
+
   // Refs to late-bound functions (avoid dependency cycles between callbacks).
   const onBrowserWordsRef = useRef<(text: string, now: number) => void>(() => undefined);
   const hangUpRef = useRef<(by: CallRecord['endedBy']) => void>(() => undefined);
@@ -566,9 +624,9 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
     async (sentences: string[], token: number, opts: { recordTurn: boolean }) => {
       if (!sentences.length) return;
       const full = sentences.join(' ');
-      if (opts.recordTurn) pushTurn({ role: 'agent', text: full, at: Date.now() });
       spokenRef.current = [];
-      replyRef.current = opts.recordTurn ? sentences : null;
+      replyRef.current = null;
+      let recorded = false; // the line enters the transcript only once it actually starts playing
       // Discard whatever the recogniser heard before we start talking.
       if (engineRef.current === 'browser') takeRecogText();
 
@@ -580,7 +638,14 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
         if (token !== turnTokenRef.current || !activeRef.current) return;
         if (!blob) continue;
         await bridgePromiseRef.current;
+        if (i === 0 || phaseRef.current !== 'speaking') await waitForQuiet(token);
         if (token !== turnTokenRef.current || !activeRef.current) return;
+        if (speechStartedRef.current) return; // the caller started talking first: they have the floor
+        if (opts.recordTurn && !recorded) {
+          pushTurn({ role: 'agent', text: full, at: Date.now() });
+          replyRef.current = sentences;
+          recorded = true;
+        }
 
         setPhaseBoth('speaking');
         speakStartAtRef.current = performance.now();
@@ -603,7 +668,7 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
       }
       if (phaseRef.current === 'speaking' || phaseRef.current === 'thinking') setPhaseBoth('listening');
     },
-    [fetchTts, playBlob, pushTurn, setPhaseBoth, takeRecogText],
+    [fetchTts, playBlob, pushTurn, setPhaseBoth, takeRecogText, waitForQuiet],
   );
 
   // ================================================================================
@@ -649,7 +714,8 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
             text: callerText,
             event,
             model: a.model,
-            agent: { name: a.name, persona: a.persona, goal: a.goal, brevity: a.brevity, discloseAI: a.discloseAI },
+            agent: { name: a.name, persona: a.persona, goal: a.goal, brevity: a.brevity, discloseAI: a.discloseAI, language: langRef.current.id },
+            callerLanguage: callerLangRef.current || undefined,
             contact: contactVars(contactRef.current),
             history: history.map((t) => ({ role: t.role, text: t.text, interrupted: t.interrupted })),
           }),
@@ -657,6 +723,9 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
         const data = await res.json();
         reply = String(data.reply || '');
         model = String(data.model || '');
+        callerLangRef.current = '';
+        // The model switched language for the caller: change voice and ears before speaking.
+        if (data.language && token === turnTokenRef.current) switchLanguage(String(data.language));
         if (!res.ok && !reply) setNotice(data.error || 'The model did not answer.');
       } catch (error) {
         if ((error as Error).name === 'AbortError') return;
@@ -682,7 +751,7 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
       endAfterSpeakRef.current = end;
       await speakLines(splitSentences(spoken), token, { recordTurn: true });
     },
-    [playBridge, pushTurn, setPhaseBoth, speakLines],
+    [playBridge, pushTurn, setPhaseBoth, speakLines, switchLanguage],
   );
 
   // ================================================================================
@@ -693,6 +762,7 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
       const lastAgent = recentAgentLines().slice(-1)[0] || '';
       const text = stripEchoPrefix(rawText.replace(/\s+/g, ' ').trim(), lastAgent);
       const wasHeld = heldRef.current;
+      if (!callerLangRef.current) callerLangRef.current = guessCallerLanguage(text, langRef.current.id);
 
       // The agent's own voice coming back through the speaker.
       if (text && isEcho(text, recentAgentLines())) {
@@ -789,7 +859,10 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
     if (!heldRef.current) setPhaseBoth('thinking');
     const t0 = performance.now();
     try {
-      const res = await fetch(`/api/transcribe?lang=${langRef.current.whisper}`, {
+      // Let Whisper notice a switch: English for every other language, Hindi for Indian English.
+      const lang = langRef.current;
+      const alt = lang.whisper !== 'en' ? 'en' : lang.id === 'en-IN' ? 'hi' : '';
+      const res = await fetch(`/api/transcribe?lang=${lang.whisper}${alt ? `&alt=${alt}` : ''}`, {
         method: 'POST',
         headers: { 'Content-Type': blob.type || 'application/octet-stream' },
         body: blob,
@@ -798,6 +871,11 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
       if (!res.ok) throw new Error(data.error || `stt ${res.status}`);
       setLatency((l) => ({ ...l, stt: Math.round(performance.now() - t0) }));
       if (!activeRef.current) return;
+      // Hinglish callers mix in English all the time; that is not a switch, so no hint there.
+      if (data.language && data.language !== langRef.current.whisper && data.text && langRef.current.id !== 'hinglish') {
+        const heard = data.language === 'en' && /-IN$|hinglish/.test(langRef.current.id) ? getLanguage('en-IN') : LANGUAGES.find((l) => l.whisper === data.language);
+        if (heard) callerLangRef.current = heard.label;
+      }
       // A newer turn already started (caller kept talking): fold this text into it.
       if (token !== turnTokenRef.current) {
         pendingPrefixRef.current = `${pendingPrefixRef.current} ${data.text || ''}`.trim();
@@ -851,8 +929,15 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
   // Browser engine: words while the agent is talking decide barge-in.
   const onBrowserWords = useCallback((text: string, now: number) => {
     const p = phaseRef.current;
+    const echo = isEcho(text, recentAgentLines());
+    if (!echo) lastHeardAtRef.current = now;
+    const w = words(text);
+    const urgent = w.some((x) => STOP_WORDS.has(x));
+    if (p === 'listening' && heldRef.current && !echo && (urgent || (w.length >= BARGE_IN_WORDS && !isBackchannel(text)))) {
+      stopPlayback(); // paused for them and they are really talking: drop the rest of the sentence
+    }
     if (p === 'listening' || p === 'thinking') {
-      if (!speechStartedRef.current && !isEcho(text, recentAgentLines()) && now - agentStoppedAtRef.current > ECHO_COOLDOWN_MS) {
+      if (!speechStartedRef.current && !echo && now - agentStoppedAtRef.current > ECHO_COOLDOWN_MS) {
         speechStartedRef.current = true;
         voiceStartAtRef.current = now;
       }
@@ -865,8 +950,8 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
     }
     if (p === 'speaking' && !heldRef.current) {
       if (now - speakStartAtRef.current < SPEAK_GRACE_MS) return;
-      if (isBackchannel(text) || isEcho(text, recentAgentLines())) return;
-      if (words(text).length >= BARGE_IN_WORDS) {
+      if (echo || (isBackchannel(text) && !urgent)) return;
+      if (urgent || w.length >= BARGE_IN_WORDS) {
         // Clear interruption: stop now, the words are already here.
         stopPlayback();
         speechStartedRef.current = true;
@@ -900,7 +985,9 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
 
     const now = performance.now();
     const p = phaseRef.current;
-    const gate = Math.max(SPEAKING_LEVEL, echoFloorRef.current * ECHO_FLOOR_MULT + ECHO_FLOOR_ADD);
+    // Speech threshold adapts to the room: a little above the background noise, within bounds.
+    const speakLvl = Math.min(MAX_SPEAKING_LEVEL, Math.max(MIN_SPEAKING_LEVEL, noiseFloorRef.current * 2 + 0.035));
+    const gate = Math.max(speakLvl, echoFloorRef.current * ECHO_FLOOR_MULT + ECHO_FLOOR_ADD);
 
     // ---- Agent is talking: track the echo floor and watch for barge-in ----
     if (p === 'speaking' && !heldRef.current) {
@@ -931,8 +1018,13 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
 
     // While the agent pauses for a barge-in, its echo is gone; use the plain threshold.
     const inCooldown = now - agentStoppedAtRef.current < ECHO_COOLDOWN_MS || now < bridgeUntilRef.current;
-    const threshold = heldRef.current ? SPEAKING_LEVEL : inCooldown ? Infinity : SPEAKING_LEVEL;
+    const threshold = heldRef.current ? speakLvl : inCooldown ? Infinity : speakLvl;
     const voiced = lvl > threshold;
+    if (voiced) lastHeardAtRef.current = now;
+    // Learn the room's background noise while nobody is talking.
+    if (p === 'listening' && !speechStartedRef.current && !inCooldown && lvl < speakLvl) {
+      noiseFloorRef.current = noiseFloorRef.current * 0.98 + lvl * 0.02;
+    }
 
     if (lvl > SOUND_LEVEL && !inCooldown) lastLoudAtRef.current = now;
     if (!speechStartedRef.current && !heldRef.current) echoFloorRef.current *= 0.97;
@@ -953,6 +1045,12 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
     }
 
     if (p !== 'listening') return;
+
+    // Paused for the caller and they keep talking: it is a real interruption. Drop the rest of
+    // the agent's sentence now; the caller has the floor.
+    if (heldRef.current && speechStartedRef.current && now - voiceStartAtRef.current > COMMIT_INTERRUPT_MS) {
+      stopPlayback();
+    }
 
     if (voiced) {
       if (!speechStartedRef.current) {
@@ -1004,7 +1102,7 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
     if (!mutedRef.current && !pendingPrefixRef.current && now - silenceSinceRef.current > SILENCE_NUDGE_MS) {
       nudgeRef.current();
     }
-  }, [cutRecorder, setPhaseBoth, switchEngine]);
+  }, [cutRecorder, setPhaseBoth, stopPlayback, switchEngine]);
 
   const whisperOkRef = useRef(false);
   useEffect(() => {
@@ -1217,7 +1315,7 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
   // UI
   // ================================================================================
   const inCall = phase !== 'idle' && phase !== 'ended';
-  const voice = VOICES.find((v) => v.id === agent.voice);
+  const liveVoice = VOICES.find((v) => v.id === voiceRef.current) || VOICES.find((v) => v.id === agent.voice);
   const statusText: Record<Phase, string> = {
     idle: 'Ready when you are',
     connecting: 'Connecting…',
@@ -1244,7 +1342,7 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
             <div className="eyebrow">{contact ? `Calling ${contact.name}` : 'Playground call'}</div>
             <h2 className="stage-title">{agent.name}</h2>
             <div className="muted small">
-              {getLanguage(agent.language).label} · {voice ? `${voice.label}, ${voice.tone}` : agent.voice}
+              {liveLang.label} · {liveVoice ? `${liveVoice.label}, ${liveVoice.tone}` : voiceRef.current}
             </div>
           </div>
           <div className="clock">{inCall ? formatClock(elapsed) : '00:00'}</div>
@@ -1308,6 +1406,9 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
             </button>
           </div>
         </div>
+        {engine === 'browser' && mobile && (
+          <div className="muted tiny hint">Phones play a short beep whenever browser listening restarts. Whisper listens silently.</div>
+        )}
         <div className="latency">
           <Activity size={13} />
           <span>STT {latency.stt != null ? `${latency.stt}ms` : engine === 'browser' ? 'live' : '—'}</span>

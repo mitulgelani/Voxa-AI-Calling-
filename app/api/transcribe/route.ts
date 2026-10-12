@@ -13,12 +13,14 @@ export async function POST(req: Request) {
   if (!audio.byteLength) return Response.json({ error: 'empty body' }, { status: 400 });
   if (audio.byteLength > MAX_BYTES) return Response.json({ error: 'too large' }, { status: 413 });
 
-  const lang = new URL(req.url).searchParams.get('lang') || 'en';
+  const params = new URL(req.url).searchParams;
+  const lang = params.get('lang') || 'en';
   const safeLang = /^[a-z]{2,3}$/.test(lang) ? lang : 'en';
+  const alt = (params.get('alt') || '').split(',').filter((a) => /^[a-z]{2,3}$/.test(a)).slice(0, 3).join(',');
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 45000);
   try {
-    const res = await fetch(`${sttUrl()}/transcribe?lang=${safeLang}`, {
+    const res = await fetch(`${sttUrl()}/transcribe?lang=${safeLang}${alt ? `&alt=${alt}` : ''}`, {
       method: 'POST',
       body: audio,
       signal: controller.signal,
@@ -31,6 +33,7 @@ export async function POST(req: Request) {
     if (!res.ok) return Response.json({ error: data.error || `stt ${res.status}` }, { status: 502 });
     return Response.json({
       text: String(data.text || ''),
+      language: data.language || safeLang,
       seconds: data.seconds ?? null,
       audio_seconds: data.audio_seconds ?? null,
     });

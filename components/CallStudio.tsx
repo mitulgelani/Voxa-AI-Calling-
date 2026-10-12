@@ -76,6 +76,8 @@ interface Props {
   agent: Agent;
   contact?: Contact | null;
   onCallEnd?: (record: CallRecord) => void;
+  /** Start the call as soon as the panel mounts (after Save & test call). */
+  autoStart?: boolean;
 }
 
 interface Latency {
@@ -145,7 +147,7 @@ function formatClock(ms: number) {
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 }
 
-export default function CallStudio({ agent, contact, onCallEnd }: Props) {
+export default function CallStudio({ agent, contact, onCallEnd, autoStart }: Props) {
   // ---- Render state (UI only) ----
   const [phase, setPhase] = useState<Phase>('idle');
   const [engine, setEngine] = useState<Engine>('whisper');
@@ -1302,6 +1304,19 @@ export default function CallStudio({ agent, contact, onCallEnd }: Props) {
 
   // Clean up if the component unmounts mid-call.
   useEffect(() => () => hangUpRef.current('caller'), []);
+
+  // Save & test call: start right away. The Save click counts as the user gesture browsers
+  // need for the microphone and audio playback.
+  const startCallRef = useRef<() => Promise<void>>(async () => undefined);
+  useEffect(() => {
+    startCallRef.current = startCall;
+  });
+  useEffect(() => {
+    if (!autoStart) return;
+    const t = window.setTimeout(() => void startCallRef.current(), 60);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const toggleMute = () => {
     const next = !mutedRef.current;

@@ -11,7 +11,7 @@ Build an AI caller with its own personality, paste your contact list from Excel,
 | Area | What it does |
 |---|---|
 | Landing page `/` | Product page with a call to action into the app |
-| Playground `/app` | Pick 1) language, 2) voice (only that language's natural voices), 3) agent, 4) who you are, then one-button live call |
+| Playground `/app` | Pick 1) language, 2) voice (only that language's natural voices), 3) agent, 4) who you are, then **Save & test call**: saves the setup and starts a fresh call with it at once |
 | Agents | Personality, goal, opening line, voice (with preview), pace, reply length, model |
 | Contacts | Paste rows from Excel / Google Sheets or upload CSV. Headers detected, every column becomes a `{{variable}}` |
 | Calls | Full transcripts with interruptions marked, CSV export |

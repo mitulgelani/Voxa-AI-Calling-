@@ -121,6 +121,13 @@ export default function Workspace() {
 // =====================================================================================
 // Playground: language → voice → agent → who you are → call
 // =====================================================================================
+interface PlayConfig {
+  langId: string;
+  voiceId: string;
+  agentId: string;
+  contactId: string;
+}
+
 function Playground(props: {
   agents: Agent[];
   agent: Agent;
@@ -131,41 +138,88 @@ function Playground(props: {
   onCallEnd: (r: CallRecord) => void;
   onEditAgent: () => void;
 }) {
-  const { agents, agent, contacts, contact } = props;
-  const [langId, setLangId] = useStored<string>('voxa.play.lang', agent.language || DEFAULT_LANGUAGE);
-  const [voiceId, setVoiceId] = useStored<string>('voxa.play.voice', agent.voice);
-  const lang = getLanguage(langId);
-  const voice = lang.voices.find((v) => v.id === voiceId) || lang.voices[0];
+  const { agents, contacts } = props;
+  const initial: PlayConfig = {
+    langId: props.agent.language || DEFAULT_LANGUAGE,
+    voiceId: props.agent.voice,
+    agentId: props.agent.id,
+    contactId: props.contact?.id || '',
+  };
+  // `saved` is what the call uses. `draft` is what the dropdowns show until you press Save.
+  const [saved, setSaved, savedReady] = useStored<PlayConfig>('voxa.play.config', initial);
+  const [draft, setDraft] = useState<PlayConfig>(initial);
+  const [runId, setRunId] = useState(0); // bumps on every Save: fresh call panel, call starts at once
+  const [justSaved, setJustSaved] = useState(false);
 
-  // Agents written for this language first, then the rest (they still speak the chosen language).
-  const native = agents.filter((a) => (a.language || DEFAULT_LANGUAGE) === lang.id);
-  const others = agents.filter((a) => (a.language || DEFAULT_LANGUAGE) !== lang.id);
+  // Load the saved setup once storage is read.
+  const loadedRef = useRef(false);
+  useEffect(() => {
+    if (!savedReady || loadedRef.current) return;
+    loadedRef.current = true;
+    setDraft(saved);
+  }, [savedReady, saved]);
+
+  // "Call" from the Contacts page: preselect that contact.
+  useEffect(() => {
+    if (props.contact && props.contact.id !== draft.contactId) setDraft((d) => ({ ...d, contactId: props.contact!.id }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.contact?.id]);
+
+  const resolve = (c: PlayConfig) => {
+    const lang = getLanguage(c.langId);
+    const voice = lang.voices.find((v) => v.id === c.voiceId) || lang.voices[0];
+    const agent = agents.find((a) => a.id === c.agentId) || agents[0];
+    const contact = contacts.find((x) => x.id === c.contactId) || null;
+    return { lang, voice, agent, contact };
+  };
+  const d = resolve(draft);
+  const live = resolve(saved);
+
+  const dirty =
+    d.lang.id !== live.lang.id || d.voice.id !== live.voice.id || d.agent.id !== live.agent.id || (d.contact?.id || '') !== (live.contact?.id || '');
+
+  const native = agents.filter((a) => (a.language || DEFAULT_LANGUAGE) === d.lang.id);
+  const others = agents.filter((a) => (a.language || DEFAULT_LANGUAGE) !== d.lang.id);
 
   const changeLanguage = (id: string) => {
     const next = getLanguage(id);
-    setLangId(next.id);
-    // Keep the agent's own voice if it speaks this language, else the first natural voice.
-    const own = next.voices.find((v) => v.id === agent.voice);
-    setVoiceId((own || next.voices[0]).id);
-    // Prefer an agent written for this language when the current one is not.
-    if ((agent.language || DEFAULT_LANGUAGE) !== next.id) {
-      const match = agents.find((a) => (a.language || DEFAULT_LANGUAGE) === next.id);
-      if (match) props.onAgent(match.id);
-    }
+    setDraft((cur) => {
+      const curAgent = agents.find((a) => a.id === cur.agentId);
+      // Prefer an agent written for this language; keep its voice if it speaks this language.
+      const match = curAgent && (curAgent.language || DEFAULT_LANGUAGE) === next.id ? curAgent : agents.find((a) => (a.language || DEFAULT_LANGUAGE) === next.id) || curAgent;
+      const own = next.voices.find((v) => v.id === match?.voice);
+      return { ...cur, langId: next.id, agentId: match?.id || cur.agentId, voiceId: (own || next.voices[0]).id };
+    });
   };
 
   const changeAgent = (id: string) => {
-    props.onAgent(id);
     const a = agents.find((x) => x.id === id);
-    if (a && lang.voices.some((v) => v.id === a.voice)) setVoiceId(a.voice);
+    setDraft((cur) => ({ ...cur, agentId: id, voiceId: a && d.lang.voices.some((v) => v.id === a.voice) ? a.voice : cur.voiceId }));
   };
 
-  // The call uses the chosen language and voice. The agent's fixed opening line is only used
+  const saveAndTest = () => {
+    const next: PlayConfig = { langId: d.lang.id, voiceId: d.voice.id, agentId: d.agent.id, contactId: d.contact?.id || '' };
+    setSaved(next);
+    setDraft(next);
+    props.onAgent(next.agentId);
+    props.onContact(next.contactId);
+    setRunId((n) => n + 1);
+    setJustSaved(true);
+    window.setTimeout(() => setJustSaved(false), 2500);
+  };
+
+  const discard = () => setDraft(saved);
+
+  // The call uses the saved language and voice. The agent's fixed opening line is only used
   // when it was written in this language; otherwise the agent opens the call itself in it.
-  const sameLanguage = (agent.language || DEFAULT_LANGUAGE) === lang.id;
+  const sameLanguage = (live.agent.language || DEFAULT_LANGUAGE) === live.lang.id;
   const effective = useMemo<Agent>(
-    () => ({ ...agent, language: lang.id, voice: voice.id, greeting: sameLanguage ? agent.greeting : '' }),
-    [agent, lang.id, voice.id, sameLanguage],
+    () => ({ ...live.agent, language: live.lang.id, voice: live.voice.id, greeting: sameLanguage ? live.agent.greeting : '' }),
+    [live.agent, live.lang.id, live.voice.id, sameLanguage],
+  );
+
+  const langOption = (l: (typeof LANGUAGES)[number]) => (
+    <option key={l.id} value={l.id}>{l.label}{l.native !== 'English' && l.native !== l.label ? ` · ${l.native}` : ''}</option>
   );
 
   return (
@@ -173,59 +227,51 @@ function Playground(props: {
       <header className="page-head">
         <div>
           <h1>Playground</h1>
-          <p className="muted">Choose a language and a voice, pick who the agent is, then talk to it like a real call.</p>
+          <p className="muted">Choose a language, voice and agent, press Save &amp; test call, and talk to it like a real phone call.</p>
         </div>
       </header>
 
-      <div className="card setup">
+      <div className={`card setup ${dirty ? 'dirty' : ''}`}>
         <div className="setup-grid">
           <label className="setup-field">
             <span className="step">1</span>
             <span className="setup-label">Language</span>
-            <select id="play-lang" value={lang.id} onChange={(e) => changeLanguage(e.target.value)}>
-              <optgroup label="India">
-                {LANGUAGES.filter((l) => l.id.endsWith('-IN') || l.id === 'hinglish').map((l) => (
-                  <option key={l.id} value={l.id}>{l.label}{l.native !== 'English' && l.native !== l.label ? ` · ${l.native}` : ''}</option>
-                ))}
-              </optgroup>
-              <optgroup label="World">
-                {LANGUAGES.filter((l) => !(l.id.endsWith('-IN') || l.id === 'hinglish')).map((l) => (
-                  <option key={l.id} value={l.id}>{l.label}{l.native !== 'English' && l.native !== l.label ? ` · ${l.native}` : ''}</option>
-                ))}
-              </optgroup>
+            <select id="play-lang" value={d.lang.id} onChange={(e) => changeLanguage(e.target.value)}>
+              <optgroup label="India">{LANGUAGES.filter((l) => l.id.endsWith('-IN') || l.id === 'hinglish').map(langOption)}</optgroup>
+              <optgroup label="World">{LANGUAGES.filter((l) => !(l.id.endsWith('-IN') || l.id === 'hinglish')).map(langOption)}</optgroup>
             </select>
           </label>
 
           <label className="setup-field">
             <span className="step">2</span>
-            <span className="setup-label">Voice <em className="muted">{lang.voices.length} for {lang.label}</em></span>
+            <span className="setup-label">Voice <em className="muted">{d.lang.voices.length} for {d.lang.label}</em></span>
             <div className="row gap">
-              <select id="play-voice" value={voice.id} onChange={(e) => setVoiceId(e.target.value)}>
+              <select id="play-voice" value={d.voice.id} onChange={(e) => setDraft((cur) => ({ ...cur, voiceId: e.target.value }))}>
                 {(['Female', 'Male'] as const).map((g) =>
-                  lang.voices.some((v) => v.group === g) ? (
+                  d.lang.voices.some((v) => v.group === g) ? (
                     <optgroup key={g} label={g}>
-                      {lang.voices.filter((v) => v.group === g).map((v) => (
+                      {d.lang.voices.filter((v) => v.group === g).map((v) => (
                         <option key={v.id} value={v.id}>{v.label} · {v.tone}</option>
                       ))}
                     </optgroup>
                   ) : null,
                 )}
               </select>
-              <PreviewButton voice={voice.id} rate={agent.rate} text={lang.sample.replace('{name}', voice.label)} label={voice.label} />
+              <PreviewButton voice={d.voice.id} rate={d.agent.rate} text={d.lang.sample.replace('{name}', d.voice.label)} label={d.voice.label} />
             </div>
           </label>
 
           <label className="setup-field">
             <span className="step">3</span>
             <span className="setup-label">Agent</span>
-            <select id="play-agent" value={agent.id} onChange={(e) => changeAgent(e.target.value)}>
+            <select id="play-agent" value={d.agent.id} onChange={(e) => changeAgent(e.target.value)}>
               {native.length > 0 && (
-                <optgroup label={`Made for ${lang.label}`}>
+                <optgroup label={`Made for ${d.lang.label}`}>
                   {native.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                 </optgroup>
               )}
               {others.length > 0 && (
-                <optgroup label={native.length ? `Other agents (will speak ${lang.label})` : `All agents (will speak ${lang.label})`}>
+                <optgroup label={`Other agents (will speak ${d.lang.label})`}>
                   {others.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                 </optgroup>
               )}
@@ -235,7 +281,7 @@ function Playground(props: {
           <label className="setup-field">
             <span className="step">4</span>
             <span className="setup-label">You are</span>
-            <select id="play-contact" value={contact?.id || ''} onChange={(e) => props.onContact(e.target.value)}>
+            <select id="play-contact" value={d.contact?.id || ''} onChange={(e) => setDraft((cur) => ({ ...cur, contactId: e.target.value }))}>
               <option value="">Yourself (no contact)</option>
               {contacts.map((c) => (
                 <option key={c.id} value={c.id}>{c.name} · {c.phone}</option>
@@ -243,21 +289,36 @@ function Playground(props: {
             </select>
           </label>
         </div>
+
         <div className="setup-foot">
-          <span className="muted small">
-            {sameLanguage
-              ? `${agent.name} will open with its saved greeting.`
-              : `${agent.name} was written in ${getLanguage(agent.language).label}; it will open the call in ${lang.label} on its own.`}
-          </span>
-          <button className="ghost-btn" onClick={props.onEditAgent}>Edit agent</button>
+          <div className="setup-status">
+            {dirty ? (
+              <span className="pending-dot">Not saved yet. The call still uses {live.agent.name} · {live.lang.label} · {live.voice.label}.</span>
+            ) : justSaved ? (
+              <span className="saved-dot">Saved. Starting a test call with {live.agent.name} in {live.lang.label}…</span>
+            ) : (
+              <span className="muted small">
+                Ready: {live.agent.name} · {live.lang.label} · {live.voice.label}
+                {sameLanguage ? '' : ` (opens the call in ${live.lang.label} on its own)`}
+              </span>
+            )}
+          </div>
+          <div className="row gap wrap">
+            <button className="ghost-btn" onClick={props.onEditAgent}>Edit agent</button>
+            {dirty && <button className="ghost-btn" onClick={discard}>Discard</button>}
+            <button className="primary-btn big-ish" onClick={saveAndTest}>
+              <Phone size={18} /> {dirty ? 'Save & test call' : 'Test call'}
+            </button>
+          </div>
         </div>
       </div>
 
       <CallStudio
-        key={`${agent.id}:${contact?.id || ''}:${agent.updatedAt}:${lang.id}:${voice.id}`}
+        key={`${runId}:${live.agent.id}:${live.agent.updatedAt}:${live.lang.id}:${live.voice.id}:${live.contact?.id || ''}`}
         agent={effective}
-        contact={contact}
+        contact={live.contact}
         onCallEnd={props.onCallEnd}
+        autoStart={runId > 0}
       />
     </div>
   );

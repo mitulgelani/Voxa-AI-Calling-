@@ -134,6 +134,13 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); }
 .setup-label { font-weight: 600; font-size: 13px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
 .setup-label em { font-style: normal; font-weight: 400; font-size: 12px; }
 .icon-btn.preview { width: 42px; height: 42px; flex: none; color: var(--accent); }
+.setup.dirty { border-color: rgba(255, 184, 107, 0.55); }
+.setup-status { min-width: 0; flex: 1; font-size: 13px; }
+.pending-dot, .saved-dot { display: inline-flex; align-items: center; gap: 8px; }
+.pending-dot { color: var(--warm); }
+.saved-dot { color: var(--ok); }
+.pending-dot::before, .saved-dot::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
+.big-ish { min-height: 46px; padding: 0 20px; }
 .setup-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 12px; }
 
 /* ---------- Call studio ---------- */

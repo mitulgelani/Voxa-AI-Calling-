@@ -32,8 +32,8 @@ function tc(s: number) {
 
 export function EvidenceCard() {
   const [active, setActive] = useState(1);
-  const [head, setHead] = useState(ANSWERS[1].at);
-  const target = useRef(ANSWERS[1].at);
+  const [head, setHead] = useState<number>(ANSWERS[1].at);
+  const target = useRef<number>(ANSWERS[1].at);
   const raf = useRef(0);
 
   // One orchestrated moment: on first view the playhead sweeps from 0 to the selected answer.

@@ -51,7 +51,7 @@ export function GateFigure() {
     const hold = plunger?.querySelectorAll<SVGElement>('[data-hold]') ?? [];
     const still = window.matchMedia('(prefers-reduced-motion: reduce)');
 
-    const capY = caps.map((c) => (passRef.current[Number(c.dataset.index)] ? GATE.capOn : GATE.capOff));
+    const capY: number[] = caps.map((c): number => (passRef.current[Number(c.dataset.index)] ? GATE.capOn : GATE.capOff));
     let barX = 0;
     let lift = { at: 0, rate: 0 };
     let raf = 0;
@@ -75,14 +75,14 @@ export function GateFigure() {
       const all = p.every(Boolean);
       let moving = false;
       caps.forEach((c, i) => {
-        const target = p[Number(c.dataset.index)] ? GATE.capOn : GATE.capOff;
+        const target: number = p[Number(c.dataset.index)] ? GATE.capOn : GATE.capOff;
         capY[i] = calm ? target : capY[i] + (target - capY[i]) * (1 - Math.exp(-dt / 0.18));
         if (Math.abs(target - capY[i]) < 0.02) capY[i] = target;
         else moving = true;
       });
       lamps.forEach((l, i) => (p[i] ? l.setAttribute('data-lit', '') : l.removeAttribute('data-lit')));
       // the bar withdraws first, then the plunger springs up; locking reverses the order
-      const barTarget = all ? GATE.barSlide : 0;
+      const barTarget: number = all ? GATE.barSlide : 0;
       const capsSettled = !moving;
       const barGo = all ? capsSettled : lift.at < 0.4;
       if (barGo) {
@@ -90,7 +90,7 @@ export function GateFigure() {
         if (Math.abs(barTarget - barX) < 0.02) barX = barTarget;
         else moving = true;
       } else moving = true;
-      const liftTarget = all && Math.abs(barX - GATE.barSlide) < 0.5 ? GATE.rise : 0;
+      const liftTarget: number = all && Math.abs(barX - GATE.barSlide) < 0.5 ? GATE.rise : 0;
       if (calm) lift = { at: liftTarget, rate: 0 };
       else {
         for (let s = 0; s < 4; s++) {

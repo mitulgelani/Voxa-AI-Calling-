@@ -52,7 +52,7 @@ export function SwitchboardFigure() {
     const lamps = Array.from(svg.querySelectorAll<SVGGElement>('[data-part="lamp"] .iso-solid'));
     const needle = svg.querySelector<SVGPathElement>('[data-part="needle"]');
     const still = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const z = carts.map((c) => (Number(c.dataset.index) === activeRef.current ? DECK_FIG.drop : 0));
+    const z: number[] = carts.map((c): number => (Number(c.dataset.index) === activeRef.current ? DECK_FIG.drop : 0));
     let vu = 0.35;
     let vuTarget = 0.35;
     let t = 0;
@@ -77,7 +77,7 @@ export function SwitchboardFigure() {
       const leaving = carts.some((c, i) => Number(c.dataset.index) !== a && z[i] < -0.5);
       carts.forEach((c, i) => {
         const idx = Number(c.dataset.index);
-        const target = idx === a ? (leaving ? z[i] : DECK_FIG.drop) : 0;
+        const target: number = idx === a ? (leaving ? z[i] : DECK_FIG.drop) : 0;
         z[i] = calm ? target : z[i] + (target - z[i]) * (1 - Math.exp(-dt / 0.14));
         if (Math.abs(target - z[i]) < 0.02) z[i] = target;
         place(c, z[i]);

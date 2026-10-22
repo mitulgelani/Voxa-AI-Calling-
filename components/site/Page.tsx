@@ -12,15 +12,15 @@ export function ReadingPage({ title, lede, toc, children }: { title: string; led
           <h1 className="font-display text-display">{title}</h1>
           <p className="mt-6 max-w-2xl text-lg text-ink-2">{lede}</p>
         </header>
-        <div className="mt-16 grid gap-12 lg:grid-cols-[200px_minmax(0,1fr)]">
+        <div className={`mt-16 grid gap-12 ${toc ? 'lg:grid-cols-[200px_minmax(0,1fr)]' : ''}`}>
           {toc ? (
             <nav aria-label="On this page" className="hidden lg:block">
               <ul className="sticky top-24 space-y-2 border-l border-line pl-4 text-sm text-ink-3">
                 {toc.map((t) => <li key={t.id}><a className="hover:text-ink" href={`#${t.id}`}>{t.label}</a></li>)}
               </ul>
             </nav>
-          ) : <div />}
-          <div className="min-w-0 max-w-3xl space-y-16">{children}</div>
+          ) : null}
+          <div className={`min-w-0 space-y-16 ${toc ? 'max-w-3xl' : 'max-w-5xl'}`}>{children}</div>
         </div>
       </main>
       <Footer />

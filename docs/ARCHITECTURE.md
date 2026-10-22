@@ -160,30 +160,42 @@ If all six pass, the campaign's `frozen_config` is written (snapshot of agent ve
 
 ## 8. Cost model and billing
 
-`usage_events` records each leg as it happens. Pricing per unit lives in `rate_cards`, versioned per provider, so invoices can be reconciled.
+The gateway writes one `usage_events` row per leg when a call finishes (telephony minutes, STT seconds, TTS characters, LLM tokens) and adds the total to the campaign with `add_campaign_spend()`, an atomic increment. `claim_call_jobs()` stops claiming once `spent_minor >= budget_cap_minor`, so a campaign can overshoot its cap by at most the calls already in flight.
 
-| Leg | Estimate (₹/min) | Source of truth |
-|---|---|---|
-| Telephony | 0.50 | carrier CDR via status webhook (`calls.carrier_cost`) |
-| STT | 0.50 | seconds of audio sent |
-| TTS | 0.54 | characters synthesised |
-| LLM | 0.90 | tokens in/out from provider usage |
-| **Total** | **≈ 2.44** | → cost per completed record ≈ ₹47 including retries and review |
-
-The budget cap is checked in `claim_call_job()` using spent + reserved (in-flight calls × expected cost). New dials stop the moment the cap would be crossed.
+Unit prices come from gateway environment variables (`PRICE_INR_*`, `PRICE_USD_*`, in paise or cents) so each deployment can match its provider contracts. Rough cost per connected minute in India: telephony ≈ ₹0.50, STT ≈ ₹0.50, TTS ≈ ₹0.55, LLM ≈ ₹0.90, ≈ ₹2.45 in total. The public price list lives in `lib/pricing.ts`.
 
 ## 9. Environments & deployment
 
-* **Web**: Vercel, `main` → production, PRs → previews. Region `bom1` for functions.
-* **DB**: Supabase project `vanidial` (ap-south-1). Migrations in `supabase/migrations`, applied in order.
-* **Gateway**: `services/voice-gateway` Docker image on the Oracle VM via Coolify (Mumbai), behind TLS. Health at `/healthz`.
-* **Observability**: structured JSON logs with `call_id`, Vercel log drains, per-call latency spans (`stt_ms`, `llm_ttft_ms`, `tts_ttfb_ms`) stored on `calls.metrics`.
+* **Web**: Vercel project `vanidial`, `main` → production, other branches → private previews. Functions in `bom1`.
+* **DB**: Supabase project `vanidial` (ap-south-1). Migrations in `supabase/migrations`, applied in order. `supabase/tests/run.sh` applies them to a local Postgres with a small Supabase shim and runs the behavioural security suite.
+* **Gateway**: `services/voice-gateway`, a Docker image for the Oracle VM via Coolify (Mumbai), behind TLS. Health at `/health`. It drains on SIGTERM: stops dialling and lets live calls finish.
+* **Observability**: one JSON log line per event with the call id (phone numbers masked); per-call reply latency (p50/p90) and interruptions stored in `calls.metrics`.
+
+### Environment variables
+
+| Where | Name | Purpose |
+|---|---|---|
+| Vercel | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Browser and server clients (RLS applies) |
+| Vercel | `PLAY_SERVER_TOKEN` | Shared secret for token-gated playground RPCs (DB stores its SHA-256) |
+| Vercel | `IP_HASH_SECRET` | Keyed hash for visitor IPs |
+| Vercel | `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `KIE_API_KEY` | Playground listening and brain |
+| Vercel + gateway | `WEBHOOK_KEY` | AES-256-GCM key for webhook signing secrets (64 hex) |
+| Gateway only | `SUPABASE_SERVICE_ROLE_KEY` | Never in Vercel or the browser |
+| Gateway only | `GATEWAY_SECRET` | Signs per-call media tokens |
+| Gateway only | `PLIVO_*`, `TELNYX_*`, `SARVAM_*` | Carriers and production speech |
 
 ## 10. What is real today vs. what needs an account
 
 | Works on deploy | Needs your accounts / approvals |
 |---|---|
-| Landing site, auth, console, all data screens, RLS | Plivo account + verified Indian number + DLT registration |
-| Playground with share links, live voice calls in the browser | Telnyx account + US number |
-| Campaign wizard and compliance gate (enforced in DB) | DND scrub provider (TRAI NCPR via carrier) |
-| Gateway code: adapters, media loop, extraction | Sarvam API key (production Hinglish/Gujarati voice) |
+| Landing, pricing, security, compliance and API pages | Supabase project (to switch on sign-in, console and playground) |
+| Console: agents, contacts, caller IDs, campaigns, gate, calls, review, compliance, billing, settings | Plivo account + Indian number + DLT registration |
+| Playground with share links, live voice calls in the browser | Telnyx account + US/Canadian number |
+| Public API `/api/v1` and signed webhooks | A DND scrub through your DLT portal or carrier |
+| Gateway: dialler, Plivo/Telnyx media, turn-taking, evidence, retention, webhook delivery | Sarvam API key (production Indian voices); an HTTPS host for the gateway |
+
+### Known limits
+
+* One gateway instance holds each call's state in memory; run more instances behind a load balancer with sticky routing on the call token, or one instance per region.
+* Telnyx webhooks are checked with Ed25519 when `TELNYX_PUBLIC_KEY` is set; Plivo callbacks are authorised by the per-call HMAC token in the URL.
+* Billing shows usage and cost; collecting payment (Razorpay or Stripe) is not wired yet.

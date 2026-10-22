@@ -71,3 +71,18 @@ returns void language sql security definer set search_path = '' as $$
   update public.campaigns set spent_minor = spent_minor + greatest(p_minor, 0) where id = p_campaign
 $$;
 revoke all on function public.add_campaign_spend(uuid, bigint) from public, anon, authenticated;
+
+-- Tell the customer's systems when a person has reviewed a call's answers.
+create or replace function public.review_done_webhook()
+returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+  if new.state = 'done' and old.state = 'open' then
+    perform public.enqueue_webhook(new.org_id, 'answer.reviewed', jsonb_build_object(
+      'call_id', new.call_id,
+      'answers', (select jsonb_object_agg(a.question_key, jsonb_build_object('value', a.value, 'review_state', a.review_state, 'original_value', a.original_value))
+                  from public.answers a where a.call_id = new.call_id)));
+  end if;
+  return null;
+end $$;
+revoke all on function public.review_done_webhook() from public, anon, authenticated;
+create trigger review_tasks_webhook after update on public.review_tasks for each row execute function public.review_done_webhook();

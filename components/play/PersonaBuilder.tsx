@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Pause, Play, Trash2, PencilLine, Phone, Copy, Check } from 'lucide-react';
-import { CORE_LANGUAGES, MORE_LANGUAGES, getLanguage } from '@/lib/voice/languages';
+import { CORE_LANGUAGES, MORE_LANGUAGES, DEFAULT_LANGUAGE_ID, DEFAULT_VOICE_ID, getLanguage } from '@/lib/voice/languages';
 
 interface Draft {
   slug?: string;
@@ -58,7 +58,7 @@ const TEMPLATES: { label: string; draft: Omit<Draft, 'voice'> }[] = [
   },
 ];
 
-const EMPTY: Draft = { name: '', tagline: '', description: '', greeting: '', language: 'hinglish', voice: 'hi-IN-SwaraNeural', rate: '+0%', visibility: 'unlisted' };
+const EMPTY: Draft = { name: '', tagline: '', description: '', greeting: '', language: DEFAULT_LANGUAGE_ID, voice: DEFAULT_VOICE_ID, rate: '+0%', visibility: 'unlisted' };
 
 export function PersonaBuilder() {
   const router = useRouter();
@@ -165,11 +165,14 @@ export function PersonaBuilder() {
               <label className="block">
                 <span className="mb-1.5 block text-sm text-ink-2">Language</span>
                 <select id="pb-language" className="field" value={draft.language} onChange={(e) => setLanguage(e.target.value)}>
+                  <optgroup label="Recommended">
+                    <option value={DEFAULT_LANGUAGE_ID}>{getLanguage(DEFAULT_LANGUAGE_ID).label}</option>
+                  </optgroup>
                   <optgroup label="Production languages">
                     {CORE_LANGUAGES.map((l) => <option key={l.id} value={l.id}>{l.label}{l.native !== 'English' && l.native !== l.label ? ` (${l.native})` : ''}</option>)}
                   </optgroup>
                   <optgroup label="More languages (playground)">
-                    {MORE_LANGUAGES.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
+                    {MORE_LANGUAGES.filter((l) => l.id !== DEFAULT_LANGUAGE_ID).map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
                   </optgroup>
                 </select>
               </label>

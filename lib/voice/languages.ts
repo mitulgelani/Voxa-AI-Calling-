@@ -33,6 +33,7 @@ export const LANGUAGES: Language[] = [
   {
     id: 'en-US', label: 'English (US)', native: 'English', speech: 'en-US', whisper: 'en',
     voices: [
+      v('en-US-AriaNeural', 'Aria', 'Female', 'natural, expressive'),
       v('en-US-AvaNeural', 'Ava', 'Female', 'warm'),
       v('en-US-EmmaNeural', 'Emma', 'Female', 'cheerful'),
       v('en-US-JennyNeural', 'Jenny', 'Female', 'friendly'),
@@ -373,5 +374,8 @@ export function guessCallerLanguage(text: string, callLanguageId: string): strin
 
 /** VaniDial's production languages (GA after native-speaker scoring). Others are playground-only. */
 export const CORE_LANGUAGE_IDS = ['hinglish', 'hi-IN', 'gu-IN', 'en-IN'] as const;
+/** The playground opens on English (US) with Aria: the best-sounding default. */
+export const DEFAULT_LANGUAGE_ID = 'en-US';
+export const DEFAULT_VOICE_ID = 'en-US-AriaNeural';
 export const CORE_LANGUAGES: Language[] = CORE_LANGUAGE_IDS.map((id) => getLanguage(id));
 export const MORE_LANGUAGES: Language[] = LANGUAGES.filter((l) => !(CORE_LANGUAGE_IDS as readonly string[]).includes(l.id));

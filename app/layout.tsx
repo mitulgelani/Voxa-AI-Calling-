@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Bricolage_Grotesque, Geist, Noto_Sans_Devanagari, Noto_Sans_Gujarati } from 'next/font/google';
+import './iso.css';
 import './globals.css';
 
 const bricolage = Bricolage_Grotesque({ subsets: ['latin'], variable: '--font-bricolage', display: 'swap' });

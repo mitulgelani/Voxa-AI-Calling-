@@ -8,7 +8,6 @@ import { GateFigure } from '@/components/figures/gate/GateFigure';
 import { SwitchboardFigure } from '@/components/figures/switchboard/SwitchboardFigure';
 import { getShowcase } from '@/lib/server/personas';
 
-export const revalidate = 300;
 
 const STEPS = [
   { title: 'Write the call', body: 'The opening line, the goal and the questions to ask. Pick the languages. The line that says the call is automated is locked in and cannot be removed.' },

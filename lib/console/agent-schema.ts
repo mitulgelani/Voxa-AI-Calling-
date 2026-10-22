@@ -1,24 +1,7 @@
 import { z } from 'zod';
 
-export const AGENT_LANGS = [
-  { id: 'hinglish', label: 'Hinglish' },
-  { id: 'hi-IN', label: 'Hindi' },
-  { id: 'gu-IN', label: 'Gujarati' },
-  { id: 'en-IN', label: 'English (India)' },
-  { id: 'en-US', label: 'English (US)' },
-] as const;
-
-export const QUESTION_TYPES = [
-  { id: 'rating', label: 'Rating 1–5' },
-  { id: 'yes_no', label: 'Yes / no' },
-  { id: 'choice', label: 'One of a list' },
-  { id: 'text', label: 'Open answer' },
-  { id: 'number', label: 'Number' },
-  { id: 'date', label: 'Date' },
-] as const;
-
-/** The disclosure must say the caller is automated, in a language the customer reads. */
-export const DISCLOSURE_RE = /(AI|automated|स्वचालित|एआई|ઓટોમેટેડ|એઆઈ)/i;
+import { DISCLOSURE_RE } from './agent-constants';
+export { AGENT_LANGS, QUESTION_TYPES, DISCLOSURE_RE, type QuestionT } from './agent-constants';
 
 export const Question = z.object({
   key: z.string().regex(/^[a-z][a-z0-9_]{1,39}$/, 'Question keys use lowercase letters, digits and underscores.'),
@@ -27,7 +10,6 @@ export const Question = z.object({
   required: z.boolean().default(true),
   options: z.array(z.string().trim().min(1).max(60)).max(12).optional(),
 });
-export type QuestionT = z.infer<typeof Question>;
 
 export const AgentVersion = z.object({
   agent: z.string().uuid(),

@@ -129,7 +129,7 @@ export function EvidencePlayer({ callId, src, durationMs, turns, answers, prompt
         </ol>
       </section>
 
-      <section aria-label="Answers" className="min-w-0 lg:sticky lg:top-8 lg:self-start">
+      <section aria-label="Answers" className="min-w-0 max-lg:order-first lg:sticky lg:top-8 lg:self-start">
         <h2 className="mb-3 font-display text-xl">Answers</h2>
         {answers.length ? (
           <ul className="space-y-2">
@@ -166,7 +166,7 @@ export function EvidencePlayer({ callId, src, durationMs, turns, answers, prompt
               <form ref={finishForm} action={finishRun}><input type="hidden" name="call" value={callId} /><Submit pending="Saving">Confirm and next</Submit></form>
               <form ref={skipForm} action={skipRun}><input type="hidden" name="call" value={callId} /><input type="hidden" name="skip" value="1" /><Submit className="btn btn-quiet" pending="Skipping">Skip</Submit></form>
             </div>
-            <p className="mt-3 text-xs leading-relaxed text-ink-3">
+            <p className="mt-3 text-xs leading-relaxed text-ink-3 max-sm:hidden">
               <Kbd>J</Kbd> <Kbd>K</Kbd> move between answers, <Kbd>Space</Kbd> plays its evidence, <Kbd>E</Kbd> corrects it, <Kbd>Enter</Kbd> confirms and opens the next call, <Kbd>S</Kbd> skips.
             </p>
           </div>

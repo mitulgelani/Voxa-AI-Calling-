@@ -2,7 +2,7 @@
 
 import { useActionState, useMemo, useState } from 'react';
 import { saveVersion } from '@/app/console/_actions/agents';
-import { AGENT_LANGS, DISCLOSURE_RE, QUESTION_TYPES, type QuestionT } from '@/lib/console/agent-schema';
+import { AGENT_LANGS, DISCLOSURE_RE, QUESTION_TYPES, type QuestionT } from '@/lib/console/agent-constants';
 import { getLanguage } from '@/lib/voice/languages';
 import { Notice, Submit } from '../forms';
 import { Field } from '../ui';

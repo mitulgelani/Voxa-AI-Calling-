@@ -1,0 +1,111 @@
+@import 'tailwindcss';
+
+/*
+  VaniDial design tokens.
+  Layout concept: left-aligned editorial column on a deep exchange-blue ground; one saffron
+  "line lamp" accent marks what is live; evidence (waveforms, timecodes) is the signature motif.
+*/
+@theme {
+  --color-ground: #0d1726;      /* exchange blue: page */
+  --color-panel: #121f33;       /* raised surfaces */
+  --color-panel-2: #172840;     /* inputs, hover */
+  --color-line: #24364f;        /* hairlines */
+  --color-line-2: #31486a;      /* stronger rules */
+  --color-ink: #edf1f7;         /* primary text */
+  --color-ink-2: #b5c1d3;       /* secondary text */
+  --color-ink-3: #7d8ca4;       /* tertiary text, captions */
+  --color-lamp: #f4a53c;        /* saffron line lamp: the one accent */
+  --color-lamp-ink: #1d1206;    /* text on lamp */
+  --color-pass: #4fd1a5;        /* verified / pass */
+  --color-warn: #f5c451;        /* needs review */
+  --color-fail: #f2735f;        /* blocked / failed */
+
+  --font-display: var(--font-bricolage), 'Noto Sans Devanagari', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-geist), var(--font-deva), var(--font-gujr), ui-sans-serif, system-ui, sans-serif;
+  --font-indic: var(--font-deva), var(--font-gujr), var(--font-geist), sans-serif;
+
+  --text-display: clamp(2.6rem, 1.6rem + 4.2vw, 5.25rem);
+  --text-display--line-height: 0.98;
+  --text-h2: clamp(1.9rem, 1.4rem + 2vw, 3.1rem);
+  --text-h2--line-height: 1.04;
+
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --radius-card: 18px;
+}
+
+:root {
+  color-scheme: dark;
+  --focus: var(--color-lamp);
+}
+
+html {
+  background: var(--color-ground);
+  color: var(--color-ink);
+  -webkit-text-size-adjust: 100%;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background:
+    radial-gradient(1100px 520px at 78% -8%, rgb(244 165 60 / 0.07), transparent 62%),
+    radial-gradient(900px 600px at -10% 10%, rgb(79 209 165 / 0.04), transparent 60%),
+    var(--color-ground);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100dvh;
+}
+
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; letter-spacing: -0.02em; }
+p { text-wrap: pretty; }
+::selection { background: rgb(244 165 60 / 0.35); color: var(--color-ink); }
+
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: 6px; }
+
+.tnum { font-variant-numeric: tabular-nums; }
+.indic { font-family: var(--font-indic); }
+
+/* Buttons: two kinds only. Primary is the lamp; quiet is an outline. */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+  min-height: 46px; padding: 0 1.25rem; border-radius: 999px;
+  font-weight: 600; font-size: 0.95rem; white-space: nowrap;
+  transition: background-color 160ms var(--ease-out-quint), border-color 160ms, transform 120ms, box-shadow 160ms;
+}
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-lamp { background: var(--color-lamp); color: var(--color-lamp-ink); box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12) inset, 0 10px 30px -12px rgb(244 165 60 / 0.6); }
+.btn-lamp:hover:not(:disabled) { background: #ffb653; }
+.btn-quiet { border: 1px solid var(--color-line-2); color: var(--color-ink); background: rgb(255 255 255 / 0.02); }
+.btn-quiet:hover:not(:disabled) { background: var(--color-panel-2); border-color: #46608a; }
+.btn-sm { min-height: 36px; padding: 0 0.9rem; font-size: 0.85rem; }
+
+.field {
+  width: 100%; background: var(--color-panel-2); border: 1px solid var(--color-line);
+  border-radius: 12px; padding: 0.7rem 0.85rem; color: var(--color-ink); outline: none;
+  transition: border-color 140ms, box-shadow 140ms;
+}
+.field::placeholder { color: var(--color-ink-3); }
+.field:focus { border-color: var(--color-lamp); box-shadow: 0 0 0 3px rgb(244 165 60 / 0.15); }
+select.field { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--color-ink-3) 50%), linear-gradient(135deg, var(--color-ink-3) 50%, transparent 50%); background-position: calc(100% - 18px) 55%, calc(100% - 13px) 55%; background-size: 5px 5px; background-repeat: no-repeat; padding-right: 2.2rem; }
+
+.surface { background: var(--color-panel); border: 1px solid var(--color-line); border-radius: var(--radius-card); }
+
+/* Live lamp: the only ambient motion on the site. */
+.lamp-dot { width: 8px; height: 8px; border-radius: 999px; background: var(--color-lamp); box-shadow: 0 0 0 0 rgb(244 165 60 / 0.6); animation: lamp 2.4s var(--ease-out-quint) infinite; }
+@keyframes lamp { 0% { box-shadow: 0 0 0 0 rgb(244 165 60 / 0.55); } 70% { box-shadow: 0 0 0 10px rgb(244 165 60 / 0); } 100% { box-shadow: 0 0 0 0 rgb(244 165 60 / 0); } }
+
+/* Anatomy figures, re-toned to the exchange-blue ground. */
+.iso.vd-iso {
+  --anatomy-page: var(--color-ground); --anatomy-card: #101c2e; --anatomy-paper: #101c2e;
+  --anatomy-face: #182941; --anatomy-top: #1b2e48; --anatomy-text: var(--color-ink-2); --anatomy-strong: var(--color-ink); --anatomy-muted: var(--color-ink-3);
+  --anatomy-shade-0: #0c1625; --anatomy-shade-1: #0f1a2c; --anatomy-shade-2: #122035; --anatomy-shade-3: #15253c;
+  --anatomy-lit-top: #2a3f5e; --anatomy-lit-shade: #1f3250;
+  --anatomy-hi: #d6deea; --anatomy-mid: #6d80a0; --anatomy-lo: #3b5070; --anatomy-faint: #26384f; --anatomy-lit: #ffd08a;
+  --anatomy-halo: #050a12; --anatomy-dot: #dfe6f1; --anatomy-green: #4fd1a5; --anatomy-red: #f2735f;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}

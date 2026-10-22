@@ -10,4 +10,7 @@ export const serverEnv = {
   openrouterKey: opt('OPENROUTER_API_KEY'),
   kieKey: opt('KIE_API_KEY'),
   groqKey: opt('GROQ_API_KEY'),
+  /** 32-byte hex key that encrypts webhook signing secrets at rest; the gateway holds the same key. */
+  webhookKey: opt('WEBHOOK_KEY'),
+  siteUrl: opt('NEXT_PUBLIC_SITE_URL') || 'http://localhost:3000',
 };

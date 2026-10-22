@@ -1,6 +1,7 @@
 import 'server-only';
 import { supabaseServer } from '@/lib/supabase/server';
 import { hasSupabase } from '@/lib/env';
+import { readOwnerKey } from './owner';
 
 export interface PublicPersona {
   id: string;
@@ -19,7 +20,7 @@ export interface PublicPersona {
 export async function getPersona(slug: string): Promise<PublicPersona | null> {
   if (!hasSupabase || !/^[a-f0-9]{14}$/.test(slug)) return null;
   const db = await supabaseServer();
-  const { data } = await db.rpc('persona_by_slug', { p_slug: slug });
+  const { data } = await db.rpc('persona_by_slug', { p_slug: slug, p_owner_key: await readOwnerKey() });
   const row = Array.isArray(data) ? data[0] : data;
   return (row as PublicPersona) ?? null;
 }

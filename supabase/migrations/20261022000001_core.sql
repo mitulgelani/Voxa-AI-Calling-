@@ -416,7 +416,7 @@ create table public.webhook_endpoints (
   org_id uuid not null references public.organizations(id) on delete cascade,
   url text not null check (url ~ '^https://'),
   events text[] not null default array['call.completed']::text[],
-  secret_hash text not null,
+  secret_enc text not null, -- AES-256-GCM, key held only by the app and the gateway (WEBHOOK_KEY)
   active boolean not null default true,
   created_at timestamptz not null default now()
 );

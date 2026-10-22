@@ -89,7 +89,7 @@ export function EvidenceCard() {
       </div>
 
       {/* waveform with evidence spans and playhead */}
-      <div className="relative mt-5 h-20 select-none" aria-hidden>
+      <div className="relative mt-9 h-20 select-none" aria-hidden>
         <svg viewBox={`0 0 ${BARS * 4} 80`} preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
           {ANSWERS.map((x, i) => (
             <rect key={x.key} x={(x.at / DURATION) * BARS * 4} y={0} width={((x.end - x.at) / DURATION) * BARS * 4} height={80} rx={3}

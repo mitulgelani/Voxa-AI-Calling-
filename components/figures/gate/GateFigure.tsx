@@ -24,12 +24,24 @@ const TOUR: boolean[][] = [
 
 const move = (u: readonly number[], n: number) => `translate(${(u[0] * n).toFixed(2)} ${(u[1] * n).toFixed(2)})`;
 
-export function GateFigure() {
+function readout(p: boolean[]) {
+  const n = p.filter(Boolean).length;
+  const first = p.findIndex((v) => !v);
+  return n === 6 ? '6 of 6 checks pass, launch released' : `${n} of 6 pass, ${MISSING[first]}`;
+}
+
+/** With `state`, the figure shows a real campaign's checks and takes no input. */
+export function GateFigure({ state }: { state?: boolean[] } = {}) {
   const host = useRef<HTMLDivElement | null>(null);
   const readoutRef = useRef<HTMLSpanElement | null>(null);
-  const [pass, setPass] = useState<boolean[]>(TOUR[0]);
+  const [pass, setPass] = useState<boolean[]>(state ?? TOUR[0]);
   const passRef = useRef(pass);
-  const touring = useRef(true);
+  const touring = useRef(!state);
+  const stateKey = state?.join(',');
+  useEffect(() => {
+    if (state) setPass(state);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stateKey]);
   const kick = useRef<() => void>(() => undefined);
 
   useEffect(() => {
@@ -148,10 +160,10 @@ export function GateFigure() {
 
   return (
     <figure>
-      <Plate fig="Fig 1" title="Six-check interlock" hint="Toggle a check below" readout="5 of 6 pass, DND scrub is stale" readoutRef={readoutRef}>
+      <Plate fig={state ? 'Pre-flight' : 'Fig 1'} title="Six-check interlock" hint={state ? 'Live state of this campaign' : 'Toggle a check below'} readout={readout(pass)} readoutRef={readoutRef}>
         <div ref={host} className="[&_svg]:h-auto [&_svg]:w-full" dangerouslySetInnerHTML={{ __html: GATE_SVG }} />
       </Plate>
-      <figcaption className="mt-4">
+      {state ? null : <figcaption className="mt-4">
         <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3" aria-label="Compliance checks">
           {CHECKS.map((c, i) => (
             <li key={c}>
@@ -170,7 +182,7 @@ export function GateFigure() {
         <p className="mt-3 text-sm text-ink-3">
           Each fader is one check, its lamp lit while it passes. A locking bar holds the launch plunger down until all six are up.
         </p>
-      </figcaption>
+      </figcaption>}
     </figure>
   );
 }

@@ -12,7 +12,7 @@ function csp(nonce: string, dev: boolean) {
     `style-src 'self' 'unsafe-inline'`,
     `img-src 'self' data: blob:`,
     `font-src 'self' data:`,
-    `media-src 'self' blob: data:`,
+    `media-src 'self' blob: data: ${SUPABASE_URL}`.trim(),
     `connect-src 'self' ${supa}`.trim(),
     `worker-src 'self' blob:`,
     `frame-ancestors 'none'`,

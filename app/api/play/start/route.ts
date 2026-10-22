@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { anonDb, ipHash, jsonError, playError, rateLimit, requirePlayConfig, PlayError } from '@/lib/server/play';
 import { serverEnv } from '@/lib/server-env';
+import { readOwnerKey } from '@/lib/server/owner';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,7 +18,7 @@ export async function POST(req: Request) {
 
     const db = anonDb();
     const { data, error } = await db.rpc('play_session_start', {
-      p_token: serverEnv.playToken, p_slug: parsed.data.slug, p_ip_hash: ip,
+      p_token: serverEnv.playToken, p_slug: parsed.data.slug, p_ip_hash: ip, p_owner_key: await readOwnerKey(),
     });
     if (error) throw playError(error.message);
     const row = Array.isArray(data) ? data[0] : data;

@@ -12,7 +12,7 @@ const gujr = Noto_Sans_Gujarati({ subsets: ['gujarati'], weight: ['400', '500', 
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://vanidial.vercel.app'),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://vanidial-one.vercel.app'),
   title: { default: 'VaniDial · Feedback calls in your customers’ language', template: '%s · VaniDial' },
   description:
     'VaniDial calls your customers in Hindi, Gujarati, Hinglish and English, holds a natural conversation, and returns every answer with the second of audio that proves it.',

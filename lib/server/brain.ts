@@ -98,7 +98,7 @@ async function callOpenRouter(model: string, system: string, history: Msg[], tex
         Authorization: `Bearer ${key}`,
         'Content-Type': 'application/json',
         'X-Title': 'VaniDial',
-        'HTTP-Referer': 'https://vanidial.vercel.app',
+        'HTTP-Referer': 'https://vanidial-one.vercel.app',
       },
       body: JSON.stringify({
         model,

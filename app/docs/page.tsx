@@ -17,7 +17,7 @@ export default function Docs() {
     <ReadingPage title="API" toc={toc} lede="Pull every answer with its evidence timestamp into your CRM, push contacts from your store, and get told the moment a call finishes. JSON over HTTPS, one key per integration.">
       <Block id="auth" title="Authentication">
         <p>Create a key in Settings → API keys and choose its permissions: <code>calls:read</code>, <code>campaigns:read</code>, <code>contacts:write</code>. Send it as a bearer token. Keys are shown once; revoke one and it stops working immediately.</p>
-        <Code>{`curl https://vanidial.vercel.app/api/v1/calls \\
+        <Code>{`curl https://vanidial-one.vercel.app/api/v1/calls \\
   -H "Authorization: Bearer vd_live_…"`}</Code>
       </Block>
       <Block id="calls" title="Calls">

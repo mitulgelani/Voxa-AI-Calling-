@@ -1,14 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Plate } from '../Plate';
+import { Pause, Play } from 'lucide-react';
 import { DECK_FIG, DECK_SVG } from './art.generated';
 
 const LANGS = [
-  { name: 'Hinglish', line: 'Haan, order time pe aaya tha.' },
-  { name: 'हिन्दी', line: 'जी, सब ठीक से पहुँच गया।' },
-  { name: 'ગુજરાતી', line: 'હા, બધું બરાબર હતું.' },
-  { name: 'English', line: 'Can we do this in English?' },
+  { name: 'Hinglish', voice: 'hi-IN-SwaraNeural', lang: 'hinglish', speaker: 'Swara' },
+  { name: 'हिन्दी', voice: 'hi-IN-MadhurNeural', lang: 'hi-IN', speaker: 'Madhur' },
+  { name: 'ગુજરાતી', voice: 'gu-IN-DhwaniNeural', lang: 'gu-IN', speaker: 'Dhwani' },
+  { name: 'English', voice: 'en-US-AriaNeural', lang: 'en-US', speaker: 'Aria' },
 ];
 // Idle tour: the order a real call might switch in.
 const TOUR = [0, 3, 0, 1, 2];
@@ -31,15 +31,42 @@ function needleD(share: number) {
 
 export function SwitchboardFigure() {
   const host = useRef<HTMLDivElement | null>(null);
-  const readoutRef = useRef<HTMLSpanElement | null>(null);
   const [active, setActive] = useState(0);
   const activeRef = useRef(0);
   const touring = useRef(true);
   const kick = useRef<() => void>(() => undefined);
+  const audio = useRef<HTMLAudioElement | null>(null);
+  const [playing, setPlaying] = useState<number | null>(null);
+  const [loading, setLoading] = useState<number | null>(null);
+
+  useEffect(() => () => audio.current?.pause(), []);
+
+  const pick = async (i: number) => {
+    touring.current = false;
+    setActive(i);
+    if (playing === i) {
+      audio.current?.pause();
+      setPlaying(null);
+      return;
+    }
+    const l = LANGS[i];
+    if (!audio.current) audio.current = new Audio();
+    audio.current.pause();
+    audio.current.src = `/api/voice-sample?voice=${encodeURIComponent(l.voice)}&lang=${encodeURIComponent(l.lang)}&name=${encodeURIComponent(l.speaker)}`;
+    audio.current.onended = () => setPlaying(null);
+    setLoading(i);
+    try {
+      await audio.current.play();
+      setPlaying(i);
+    } catch {
+      setPlaying(null);
+    } finally {
+      setLoading(null);
+    }
+  };
 
   useEffect(() => {
     activeRef.current = active;
-    if (readoutRef.current) readoutRef.current.textContent = `Speaking ${LANGS[active].name}`;
     kick.current();
   }, [active]);
 
@@ -128,31 +155,31 @@ export function SwitchboardFigure() {
 
   return (
     <figure>
-      <Plate fig="Fig 2" title="Voice deck" hint="Pick the language the caller speaks" readout="Speaking Hinglish" readoutRef={readoutRef}>
+      <div className="iso vd-iso overflow-hidden rounded-[var(--radius-card)] border border-line bg-[#101c2e] px-1 py-4 sm:px-3">
         <div ref={host} className="[&_svg]:h-auto [&_svg]:w-full" dangerouslySetInnerHTML={{ __html: DECK_SVG }} />
-      </Plate>
+      </div>
       <figcaption className="mt-4">
-        <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Caller language">
+        <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Hear a voice">
           {LANGS.map((l, i) => (
             <li key={l.name}>
               <button
                 type="button"
-                onClick={() => {
-                  touring.current = false;
-                  setActive(i);
-                }}
+                onClick={() => void pick(i)}
                 aria-pressed={active === i}
-                className={`w-full rounded-xl border px-3 py-2 text-left text-sm transition-colors ${active === i ? 'border-lamp bg-lamp/10 text-ink' : 'border-line-2 text-ink-2 hover:text-ink'}`}
+                aria-label={`Hear ${l.speaker} in ${l.name}`}
+                className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${active === i ? 'border-lamp bg-lamp/10 text-ink' : 'border-line-2 text-ink-2 hover:text-ink'}`}
               >
-                <span className="tnum mr-2 text-ink-3">{i + 1}</span>
-                <span className="indic">{l.name}</span>
+                <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full ${active === i ? 'bg-lamp text-lamp-ink' : 'bg-panel-2 text-ink-2'}`}>
+                  {playing === i ? <Pause size={13} aria-hidden /> : <Play size={13} aria-hidden fill="currentColor" className={loading === i ? 'animate-pulse' : ''} />}
+                </span>
+                <span className="min-w-0">
+                  <span className="indic block text-sm leading-tight">{l.name}</span>
+                  <span className="block text-xs text-ink-3">{l.speaker}</span>
+                </span>
               </button>
             </li>
           ))}
         </ul>
-        <p className="indic mt-3 text-sm text-ink-3">
-          Caller: “{LANGS[active].line}” The seated cartridge is the voice and language the agent is using right now.
-        </p>
       </figcaption>
     </figure>
   );

@@ -3,10 +3,8 @@ import { Logo } from './Logo';
 
 const LINKS = [
   { href: '/#how', label: 'How it works' },
-  { href: '/#evidence', label: 'Evidence' },
-  { href: '/#compliance', label: 'Compliance' },
-  { href: '/pricing', label: 'Pricing' },
   { href: '/playground', label: 'Playground' },
+  { href: '/pricing', label: 'Pricing' },
 ];
 
 export function Nav() {
@@ -21,7 +19,7 @@ export function Nav() {
         </ul>
         <div className="ml-auto flex items-center gap-2">
           <Link href="/login" className="btn btn-sm hidden text-ink-2 hover:text-ink sm:inline-flex">Sign in</Link>
-          <Link href="/playground" className="btn btn-lamp btn-sm">Try a live call</Link>
+          <Link href="/playground" className="btn btn-lamp btn-sm">Talk to it now</Link>
         </div>
       </nav>
     </header>

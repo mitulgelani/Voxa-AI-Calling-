@@ -8,11 +8,11 @@ export function Footer() {
         <div className="max-w-sm">
           <Logo />
           <p className="mt-4 text-sm text-ink-3">
-            Feedback calls in your customers’ language, with the audio to prove every answer. Built in India for Indian languages.
+            AI calls in your customers’ language. Built in India.
           </p>
         </div>
         {[
-          { h: 'Product', l: [['/#how', 'How it works'], ['/#evidence', 'Evidence'], ['/pricing', 'Pricing'], ['/playground', 'Playground']] },
+          { h: 'Product', l: [['/#how', 'How it works'], ['/pricing', 'Pricing'], ['/playground', 'Playground']] },
           { h: 'Trust', l: [['/compliance', 'Compliance'], ['/security', 'Security'], ['/compliance#data', 'Data deletion']] },
           { h: 'Company', l: [['/login', 'Sign in'], ['/docs', 'API docs'], ['mailto:hello@vanidial.com', 'hello@vanidial.com']] },
         ].map((c) => (

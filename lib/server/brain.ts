@@ -4,12 +4,16 @@ import { LANGUAGES, getLanguage, matchesScript, parseLanguageTag, type Language 
 
 /**
  * The brain: one short spoken reply per turn, in the locked language.
- * OpenRouter (Gemini 2.5 Flash, ~0.7 s to first token) is primary; KIE is the fallback.
+ * OpenRouter (Gemini 2.5 Flash) when its key is set, then Groq (gpt-oss), then KIE.
  */
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const KIE_URL = 'https://api.kie.ai/codex/v1/responses';
 const OR_FAST = 'google/gemini-2.5-flash';
+const GROQ_CHAT_URL = 'https://api.groq.com/openai/v1/chat/completions';
+/** Groq production models (Oct 2026). Llama 3.3 70B was retired on 16 Aug 2026. */
+const GROQ_FAST = process.env.GROQ_CHAT_MODEL || 'openai/gpt-oss-120b';
+const GROQ_BACKUP = 'openai/gpt-oss-20b';
 const KIE_FAST = 'deepseek-v4-1-flash';
 const HISTORY_TURNS = 10;
 const TURN_CHARS = 800;
@@ -84,6 +88,38 @@ export function buildSystemPrompt(p: PersonaBrief, lang: Language, short = true)
     `Remember: reply in ${lang.label}.`,
   ];
   return lines.filter((l, i) => l !== '' || lines[i - 1] !== '').join('\n').trim();
+}
+
+async function callGroq(model: string, system: string, history: Msg[], text: string) {
+  const key = serverEnv.groqKey;
+  if (!key) throw new Error('GROQ_API_KEY not set');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12000);
+  try {
+    const res = await fetch(GROQ_CHAT_URL, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        // gpt-oss reasons before answering; keep that short for a live call and leave room for it.
+        reasoning_effort: 'low',
+        include_reasoning: false,
+        max_completion_tokens: 600,
+        temperature: 0.6,
+        messages: [
+          { role: 'system', content: system },
+          ...history.map((h) => ({ role: h.role, content: h.text })),
+          { role: 'user', content: text },
+        ],
+      }),
+    });
+    if (!res.ok) throw new Error(`groq ${res.status} ${(await res.text().catch(() => '')).slice(0, 160)}`);
+    const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+    return String(data.choices?.[0]?.message?.content || '').trim();
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function callOpenRouter(model: string, system: string, history: Msg[], text: string) {
@@ -193,13 +229,14 @@ export interface BrainResult {
 
 /** One reply. Tries OpenRouter, then KIE; enforces the language lock with a single rewrite. */
 export async function think(system: string, history: Msg[], text: string, languageId: string): Promise<BrainResult | null> {
-  const routes: { provider: 'or' | 'kie'; model: string }[] = [];
+  const routes: { provider: 'or' | 'groq' | 'kie'; model: string }[] = [];
   if (serverEnv.openrouterKey) routes.push({ provider: 'or', model: OR_FAST });
+  if (serverEnv.groqKey) routes.push({ provider: 'groq', model: GROQ_FAST }, { provider: 'groq', model: GROQ_BACKUP });
   if (serverEnv.kieKey) routes.push({ provider: 'kie', model: KIE_FAST });
   const started = Date.now();
   for (const r of routes) {
     const call = (s: string, h: Msg[], t: string) =>
-      r.provider === 'or' ? callOpenRouter(r.model, s, h, t) : callKie(r.model, s, h, t);
+      r.provider === 'or' ? callOpenRouter(r.model, s, h, t) : r.provider === 'groq' ? callGroq(r.model, s, h, t) : callKie(r.model, s, h, t);
     try {
       let reply = await call(system, history, text);
       if (!reply) continue;

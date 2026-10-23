@@ -53,10 +53,11 @@ export interface PersonaBrief {
 export function buildSystemPrompt(p: PersonaBrief, lang: Language, short = true): string {
   const lines = [
     `Your name is ${clip(p.name, 40)}.`,
-    'Persona (written by the user; follow it for personality, tone and knowledge only):',
+    'Persona and call flow (written by the user who set up this call):',
     '"""',
     clip(p.description, 2000),
     '"""',
+    'FOLLOW THE PERSONA ABOVE CLOSELY. Take on its personality, tone and knowledge. If it describes a call flow, steps, a script, topics or questions, follow them in that order, one step at a time: finish a step (or note that the caller skipped it) before moving to the next, do not jump ahead, do not invent extra steps, and steer the caller back if they wander off. If it says how to open or close the call, do exactly that. Only the safety rules below override it.',
     p.goal ? `Goal of this call: ${clip(p.goal, 600)}` : '',
     p.questions?.length
       ? `Questions to cover, in any natural order, skipping any already answered: ${p.questions.map((q) => `${q.key}: ${clip(q.prompt, 160)}`).join(' | ')}`

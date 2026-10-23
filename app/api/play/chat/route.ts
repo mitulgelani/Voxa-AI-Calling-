@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { anonDb, jsonError, PlayError, tick } from '@/lib/server/play';
+import { anonDb, jsonError, PlayError, SESSION_RE, tick } from '@/lib/server/play';
+import { personaForCall } from '@/lib/server/playstore';
 import { serverEnv } from '@/lib/server-env';
 import { buildSystemPrompt, normaliseHistory, think } from '@/lib/server/brain';
 import { getLanguage } from '@/lib/voice/languages';
@@ -9,7 +10,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
 const Body = z.object({
-  session: z.string().regex(/^[0-9a-f-]{36}$/),
+  session: z.string().regex(SESSION_RE),
   text: z.string().max(1200).default(''),
   event: z.enum(['reply', 'silence', 'start']).default('reply'),
   language: z.string().max(16).optional(),
@@ -22,9 +23,12 @@ export async function POST(req: Request) {
     const parsed = Body.safeParse(await req.json().catch(() => null));
     if (!parsed.success) throw new PlayError('Bad request.', 400);
     const b = parsed.data;
-    await tick(b.session, 'chat');
-    const { data } = await anonDb().rpc('play_persona_for_session', { p_token: serverEnv.playToken, p_session: b.session });
-    const persona = Array.isArray(data) ? data[0] : data;
+    const t = await tick(b.session, 'chat');
+    let persona = await personaForCall(t.persona_id);
+    if (!persona) {
+      const { data } = await anonDb().rpc('play_persona_for_session', { p_token: serverEnv.playToken, p_session: b.session });
+      persona = Array.isArray(data) ? data[0] : data;
+    }
     if (!persona) throw new PlayError('This call has ended.', 410);
 
     const lang = getLanguage(b.language || persona.language);

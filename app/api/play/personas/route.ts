@@ -1,8 +1,8 @@
 import crypto from 'crypto';
 import { cookies } from 'next/headers';
 import { z } from 'zod';
-import { anonDb, ipHash, jsonError, playError, PlayError, rateLimit, requirePlayConfig } from '@/lib/server/play';
-import { serverEnv } from '@/lib/server-env';
+import { ipHash, jsonError, PlayError, rateLimit, requirePlayConfig } from '@/lib/server/play';
+import { deletePersona, myPersonas, savePersona } from '@/lib/server/playstore';
 import { LANGUAGES } from '@/lib/voice/languages';
 import { VOICE_IDS } from '@/lib/voice/voices';
 
@@ -39,9 +39,7 @@ export async function GET() {
     requirePlayConfig();
     const key = await ownerKey(false);
     if (!key) return Response.json({ personas: [] });
-    const { data, error } = await anonDb().rpc('play_my_personas', { p_token: serverEnv.playToken, p_owner_key: key });
-    if (error) throw playError(error.message);
-    return Response.json({ personas: data ?? [] });
+    return Response.json({ personas: await myPersonas(key) });
   } catch (e) {
     return jsonError(e);
   }
@@ -55,16 +53,8 @@ export async function POST(req: Request) {
     if (!(await rateLimit(`persona:${ipHash(req)}`, 20, 3600))) throw new PlayError('Too many saves. Try again later.', 429);
     const p = parsed.data;
     const key = await ownerKey(true);
-    const { data, error } = await anonDb().rpc('play_save_persona', {
-      p_token: serverEnv.playToken, p_owner_key: key, p_slug: p.slug ?? null,
-      p_name: p.name, p_tagline: p.tagline, p_description: p.description, p_greeting: p.greeting,
-      p_language: p.language, p_voice: p.voice, p_rate: p.rate, p_visibility: p.visibility, p_accent: p.accent,
-    });
-    if (error) {
-      if (/25 personas/.test(error.message)) throw new PlayError('You can keep up to 25 personas. Delete one first.', 400);
-      throw playError(error.message);
-    }
-    return Response.json({ slug: data });
+    const slug = await savePersona(key!, p);
+    return Response.json({ slug });
   } catch (e) {
     return jsonError(e);
   }
@@ -76,8 +66,7 @@ export async function DELETE(req: Request) {
     const slug = new URL(req.url).searchParams.get('slug') || '';
     const key = await ownerKey(false);
     if (!key || !/^[a-f0-9]{14}$/.test(slug)) throw new PlayError('Not found.', 404);
-    const { error } = await anonDb().rpc('play_delete_persona', { p_token: serverEnv.playToken, p_owner_key: key, p_slug: slug });
-    if (error) throw playError(error.message);
+    await deletePersona(key, slug);
     return Response.json({ ok: true });
   } catch (e) {
     return jsonError(e);

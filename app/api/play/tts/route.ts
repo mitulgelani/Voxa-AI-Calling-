@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { jsonError, PlayError, tick } from '@/lib/server/play';
+import { jsonError, PlayError, SESSION_RE, tick } from '@/lib/server/play';
 import { warmTts } from '@/lib/voice/edge-tts-warm';
 import { VOICE_IDS } from '@/lib/voice/voices';
 
@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
 const Body = z.object({
-  session: z.string().regex(/^[0-9a-f-]{36}$/),
+  session: z.string().regex(SESSION_RE),
   text: z.string().min(1).max(600),
   voice: z.string().max(60),
   rate: z.enum(['-8%', '+0%', '+8%']).default('+0%'),

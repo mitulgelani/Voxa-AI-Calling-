@@ -24,7 +24,7 @@ export function HomeView({ showcase }: { showcase: ShowcasePersona[] }) {
       <Nav />
       <main>
         {/* Hero: one promise, and the product you can hear right here */}
-        <section className="mx-auto grid max-w-7xl items-center gap-12 px-4 pb-20 pt-14 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-16 lg:pt-24">
+        <section className="mx-auto grid max-w-7xl items-center gap-12 px-4 pb-20 pt-14 sm:px-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:gap-14 lg:pt-24">
           <div>
             <h1 className="font-display text-display font-semibold">AI that calls your customers in their language.</h1>
             <p className="mt-6 max-w-lg text-lg leading-relaxed text-ink-2">

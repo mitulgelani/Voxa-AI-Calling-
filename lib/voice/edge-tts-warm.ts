@@ -15,8 +15,9 @@ import os from 'os';
 import path from 'path';
 import WebSocket from 'ws';
 import { voiceLocale } from './languages';
+import { SEC_MS_GEC_VERSION_PREFIX, TRUSTED_CLIENT_TOKEN, secMsGecV2 } from './edge-drm';
 
-export const TRUSTED_CLIENT_TOKEN = '6A5AA1D4EAFF4E9FB37E23D68491D6F4';
+export { TRUSTED_CLIENT_TOKEN };
 export const CHROMIUM_FULL_VERSION = '143.0.3650.75';
 const CHROMIUM_MAJOR = CHROMIUM_FULL_VERSION.split('.')[0];
 const WSS_BASE = 'wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1';
@@ -37,17 +38,9 @@ export interface SynthOptions {
   pitch?: string;
 }
 
-/** Sec-MS-GEC token. BigInt(...) calls, not literals: the project targets below ES2020. */
+/** Sec-MS-GEC token (v2 since October 2026; the service rejects v1). */
 export function secMsGec(): string {
-  const unixSeconds = BigInt(Math.floor(Date.now() / 1000));
-  let ticks = (unixSeconds + BigInt(11644473600)) * BigInt(10000000);
-  const window = BigInt(3000000000);
-  ticks = ticks - (ticks % window);
-  return crypto
-    .createHash('sha256')
-    .update(ticks.toString() + TRUSTED_CLIENT_TOKEN, 'ascii')
-    .digest('hex')
-    .toUpperCase();
+  return secMsGecV2();
 }
 
 function uuid(): string {
@@ -137,7 +130,7 @@ class WarmEdgeTts {
     const url =
       `${WSS_BASE}?TrustedClientToken=${TRUSTED_CLIENT_TOKEN}` +
       `&Sec-MS-GEC=${secMsGec()}` +
-      `&Sec-MS-GEC-Version=1-${CHROMIUM_FULL_VERSION}` +
+      `&Sec-MS-GEC-Version=${SEC_MS_GEC_VERSION_PREFIX}${CHROMIUM_FULL_VERSION}` +
       `&ConnectionId=${uuid()}`;
 
     this.connecting = new Promise<WebSocket>((resolve, reject) => {

@@ -78,7 +78,8 @@ test('call prompt: adaptive length, brief first, tags kept, opening not repeated
     { name: 'Mitul', attrs: { plan: 'Gold' } },
   );
   assert.match(p, /You are Riya/);
-  assert.match(p, /5 to 10 sentences/);
+  assert.match(p, /5 to 10 short sentences/);
+  assert.match(p, /about a minute of speech/);
   assert.doesNotMatch(p, /under 25 words/);
   assert.match(p, /\[OPTOUT\] \[END\]/);
   assert.match(p, /\[CALLBACK\] \[END\]/);

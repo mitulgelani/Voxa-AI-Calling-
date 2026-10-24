@@ -77,7 +77,9 @@ test('call prompt: adaptive length, brief first, tags kept, opening not repeated
     'hinglish',
     { name: 'Mitul', attrs: { plan: 'Gold' } },
   );
-  assert.match(p, /You are Riya/);
+  assert.match(p, /Your name is Riya\./);
+  assert.ok(p.startsWith('# How you work'), 'the shared, cacheable part comes first');
+  assert.doesNotMatch(p.slice(0, p.indexOf('# Your brief')), /Riya|Mitul|Gold/, 'nothing call-specific before the brief');
   assert.match(p, /5 to 10 short sentences/);
   assert.match(p, /about a minute of speech/);
   assert.doesNotMatch(p, /under 25 words/);

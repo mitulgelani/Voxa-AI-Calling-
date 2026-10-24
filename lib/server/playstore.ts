@@ -2,6 +2,7 @@ import 'server-only';
 import crypto from 'crypto';
 import { del, get, put } from '@vercel/blob';
 import { serverEnv } from '@/lib/server-env';
+import { compileBrief } from './brain';
 import { anonDb, backend, PlayError, playError, requirePlayConfig as requireBackend } from './play';
 
 /**
@@ -34,6 +35,7 @@ export interface StoredPersona extends Omit<PersonaInput, 'slug' | 'visibility'>
   call_count: number;
   updated_at: string;
   owner?: string; // HMAC of the owner key; never sent to the browser
+  brief?: string; // structured brief built from the description at save time (shown only to its owner)
 }
 
 export interface PublicPersona {
@@ -131,6 +133,7 @@ const toPublic = (p: StoredPersona, isOwner: boolean): PublicPersona => ({
   language: p.language, voice: p.voice, rate: p.rate, accent: p.accent, call_count: p.call_count, is_owner: isOwner,
 });
 
+// The owner may see the brief built from their own description; the owner hash never leaves the server.
 const strip = ({ owner: _o, ...rest }: StoredPersona) => rest;
 
 /* ------------------------------------------------------------------ public API */
@@ -155,7 +158,7 @@ export async function personaBySlug(slug: string, ownerKey: string | null): Prom
 }
 
 /** The persona behind a running call (privacy was checked when the call started). */
-export async function personaForCall(slug: string): Promise<{ name: string; description: string; language: string } | null> {
+export async function personaForCall(slug: string): Promise<{ name: string; description: string; language: string; brief?: string } | null> {
   const builtIn = BUILT_IN.find((p) => p.share_slug === slug);
   if (builtIn) return builtIn;
   if (backend() !== 'blob' || !SLUG_RE.test(slug)) return null;
@@ -210,10 +213,13 @@ export async function savePersona(ownerKey: string, p: PersonaInput): Promise<st
     if (list.length >= MAX_PER_OWNER) throw new PlayError('You can keep up to 25 personas. Delete one first.', 400);
     slug = crypto.randomBytes(7).toString('hex');
   }
+  // Build the structured brief once per description change; calls then run on it instead of the raw text.
+  const sameText = existing && existing.description === p.description && existing.name === p.name;
+  const brief = sameText && existing?.brief ? existing.brief : (await compileBrief(p.name, p.description)) ?? undefined;
   const record: StoredPersona = {
     share_slug: slug, name: p.name, tagline: p.tagline, description: p.description, greeting: p.greeting,
     language: p.language, voice: p.voice, rate: p.rate, visibility: p.visibility, accent: p.accent,
-    call_count: existing?.call_count ?? 0, updated_at: new Date().toISOString(), owner,
+    call_count: existing?.call_count ?? 0, updated_at: new Date().toISOString(), owner, brief,
   };
   await writeJson(personaPath(slug), record);
   await writeJson(ownerPath(owner), [record, ...list.filter((x) => x.share_slug !== slug)]);

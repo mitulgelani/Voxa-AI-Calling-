@@ -32,14 +32,14 @@ export async function POST(req: Request) {
     if (!persona) throw new PlayError('This call has ended.', 410);
 
     const lang = getLanguage(b.language || persona.language);
-    const system = buildSystemPrompt({ name: persona.name, description: persona.description }, lang);
+    const system = buildSystemPrompt({ name: persona.name, description: persona.brief || persona.description }, lang);
     const reminder = `\n(Reply in ${lang.label}.${b.callerLanguage ? ` The caller's words look like ${b.callerLanguage}.` : ''})`;
     const text =
       b.event === 'start'
-        ? `[The call just connected. Open naturally in one or two short sentences in ${lang.label}: greet them, say your name, and say briefly that you are an AI.]`
+        ? `[The call just connected. Open the call in ${lang.label} as your brief and rules say: who you are, who you are calling from, that you are an AI assistant, and the reason for the call, then one easy question. Keep the opening to two or three sentences.]`
         : b.event === 'silence'
           ? `[The caller has gone quiet. Check in briefly in ${lang.label}, like "Hello, are you still there?". If you already checked in, say a short goodbye and end with [END].]`
-          : (b.text.trim() || '[inaudible]') + reminder;
+          : (b.text.trim() || '[unintelligible]') + reminder;
 
     const out = await think(system, normaliseHistory(b.history), text, lang.id);
     if (!out) throw new PlayError('The AI did not answer. Try again in a moment.', 502);

@@ -9,7 +9,7 @@ process.env.GATEWAY_SECRET ??= 'a'.repeat(64);
 const { mulawToPcm, pcmToMulaw, resample, wav, parseWav, Tape } = await import('../audio.js');
 const { signCall, verifyCall } = await import('../token.js');
 const { TurnDetector } = await import('../turns.js');
-const { OPT_OUT } = await import('../brain.js');
+const { OPT_OUT, speechChunks, systemPrompt } = await import('../brain.js');
 
 test('µ-law round trip stays within quantisation error', () => {
   const pcm = Int16Array.from({ length: 800 }, (_, i) => Math.round(Math.sin(i / 5) * 12000));
@@ -58,4 +58,32 @@ test('tape mixes on the timeline', () => {
 test('opt-out phrases in Hindi, Hinglish, Gujarati and English', () => {
   for (const s of ['please don\'t call me again', 'mujhe call mat karo', 'मुझे दोबारा फोन मत करना', 'મને ફોન ના કરશો', 'remove my number']) assert.ok(OPT_OUT.test(s), s);
   for (const s of ['call time pe aaya', 'I will call you back', 'हाँ ठीक है']) assert.ok(!OPT_OUT.test(s), s);
+});
+
+test('long replies split into speakable chunks without breaking numbers', () => {
+  const text = 'It costs ₹4,999.50 a month. That includes setup! Do you want the 4.5 star plan? First, we visit. Then we install. Finally, we train your team.';
+  const parts = speechChunks(text, 60);
+  assert.ok(parts.length >= 3, `got ${parts.length}`);
+  assert.equal(parts.join(' '), text);
+  assert.ok(parts.every((p) => p.length <= 60 || !p.includes(' ')), 'chunks respect the size when sentences allow');
+  assert.ok(parts.some((p) => p.includes('₹4,999.50')) && parts.some((p) => p.includes('4.5 star')), 'numbers stay whole');
+  assert.deepEqual(speechChunks('हाँ जी। आपका ऑर्डर कल आएगा। ठीक है?', 12), ['हाँ जी।', 'आपका ऑर्डर कल आएगा।', 'ठीक है?']);
+  assert.deepEqual(speechChunks('no punctuation at all'), ['no punctuation at all']);
+});
+
+test('call prompt: adaptive length, brief first, tags kept, opening not repeated', () => {
+  const p = systemPrompt(
+    { agentName: 'Riya', goal: 'Book a renewal call', persona: 'GOAL: renew\nFLOW: 1. confirm', opening: 'Hi', disclosure: 'AI', questions: [{ key: 'q1', type: 'rating', prompt: 'Rate us', required: true }], languages: ['hinglish', 'en-IN'] },
+    'hinglish',
+    { name: 'Mitul', attrs: { plan: 'Gold' } },
+  );
+  assert.match(p, /You are Riya/);
+  assert.match(p, /5 to 10 sentences/);
+  assert.doesNotMatch(p, /under 25 words/);
+  assert.match(p, /\[OPTOUT\] \[END\]/);
+  assert.match(p, /\[CALLBACK\] \[END\]/);
+  assert.match(p, /already been said/);
+  assert.match(p, /Rate us \(a number from 1 to 5\)/);
+  assert.match(p, /Known details: plan: Gold/);
+  assert.ok(p.indexOf('# Your brief') < p.indexOf('# Rules that override everything above'), 'rules come last');
 });

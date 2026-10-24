@@ -6,7 +6,7 @@ import { carriers, type CarrierName, type MediaLink } from './carriers/index.js'
 import { mulawToPcm, pcmToMulaw, Tape } from './audio.js';
 import { TurnDetector } from './turns.js';
 import { listen, speak, type Voice } from './speech.js';
-import { OPT_OUT, reply, systemPrompt, type Line, type Script } from './brain.js';
+import { OPT_OUT, reply, speechChunks, systemPrompt, type Line, type Script } from './brain.js';
 import { finishCall, type CallUsage } from './post.js';
 
 const NUDGE: Record<string, string> = {
@@ -44,7 +44,10 @@ export class CallSession {
   readonly usage: CallUsage = { sttSeconds: 0, ttsChars: 0, llmTokens: 0, turnLatencies: [], interruptions: 0, providers: new Set() };
   private t0 = Date.now();
   private seq = 0;
-  private playing: { startMs: number; pcm: Int16Array; seq: number } | null = null;
+  /** Agent audio scheduled on the line and not yet written to the tape, in order. */
+  private pending: { startMs: number; pcm: Int16Array; seq: number }[] = [];
+  /** Bumped on every barge-in, so a reply still being synthesized stops queueing sentences. */
+  private cuts = 0;
   private playEndMs = 0;
   private busy = false;
   private queued: { pcm: Int16Array; startMs: number; endMs: number } | null = null;
@@ -100,14 +103,24 @@ export class CallSession {
   private onSpeechStart(atMs: number) {
     this.lastHeardMs = atMs;
     // Barge-in: the caller has priority. Stop the agent and keep only what was actually played.
-    if (this.playing && atMs < this.playEndMs) {
+    if (this.pending.length && atMs < this.playEndMs) {
       this.send([this.link.clear()]);
-      const played = Math.max(0, Math.round(((atMs - this.playing.startMs) * 8000) / 1000));
-      this.tape.mix(this.playing.startMs, this.playing.pcm.subarray(0, played));
-      const line = this.lines.find((l) => l.seq === this.playing!.seq);
-      if (line) { line.interrupted = true; line.end_ms = atMs; }
+      this.cuts++;
+      for (const seg of this.pending) {
+        const durMs = (seg.pcm.length / 8000) * 1000;
+        const line = this.lines.find((l) => l.seq === seg.seq);
+        if (seg.startMs + durMs <= atMs) {
+          this.tape.mix(seg.startMs, seg.pcm);
+        } else if (seg.startMs < atMs) {
+          this.tape.mix(seg.startMs, seg.pcm.subarray(0, Math.round(((atMs - seg.startMs) * 8000) / 1000)));
+          if (line) { line.interrupted = true; line.end_ms = atMs; }
+        } else if (line) {
+          // queued but never heard: it was not said
+          this.lines.splice(this.lines.indexOf(line), 1);
+        }
+      }
       this.usage.interruptions++;
-      this.playing = null;
+      this.pending = [];
       this.playEndMs = atMs;
     }
   }
@@ -144,7 +157,15 @@ export class CallSession {
       if (r.optOut) this.optOut = true;
       if (r.callback) this.callback = true;
       if (this.optOut) await db.rpc('gateway_opt_out', { p_call: this.callId });
-      if (r.text) await this.say(r.text, false, started);
+      if (r.text) {
+        // Speak sentence by sentence: the first one plays while the rest are synthesized, so a long
+        // answer starts as fast as a short one. Stop queueing if the customer cuts in.
+        const cutsAtStart = this.cuts;
+        const parts = speechChunks(r.text);
+        for (let i = 0; i < parts.length && this.cuts === cutsAtStart && !this.finished; i++) {
+          await this.say(parts[i], false, i === 0 ? started : undefined);
+        }
+      }
       if (r.end || this.optOut) void this.end('agent');
     } catch (e) {
       log('warn', 'turn failed', { call: this.callId, err: String(e) });
@@ -163,12 +184,18 @@ export class CallSession {
     this.usage.providers.add(`tts:${spoken.provider}`);
     if (turnStarted) this.usage.turnLatencies.push(Date.now() - turnStarted);
     if (this.finished) return;
-    if (this.playing) this.tape.mix(this.playing.startMs, this.playing.pcm); // previous line finished in full
-    const startMs = Math.max(this.now(), this.playEndMs);
+    const now = this.now();
+    // anything that has finished playing goes onto the tape in full
+    this.pending = this.pending.filter((seg) => {
+      const done = seg.startMs + (seg.pcm.length / 8000) * 1000 <= now;
+      if (done) this.tape.mix(seg.startMs, seg.pcm);
+      return !done;
+    });
+    const startMs = Math.max(now, this.playEndMs);
     const durMs = (spoken.pcm.length / 8000) * 1000;
     const seq = ++this.seq;
     this.lines.push({ speaker: 'agent', text, seq, start_ms: Math.round(startMs), end_ms: Math.round(startMs + durMs) });
-    this.playing = { startMs, pcm: spoken.pcm, seq };
+    this.pending.push({ startMs, pcm: spoken.pcm, seq });
     this.playEndMs = startMs + durMs;
     this.send(this.link.play(pcmToMulaw(spoken.pcm)));
   }
@@ -204,10 +231,12 @@ export class CallSession {
     this.finished = true;
     this.timers.forEach((t) => clearTimeout(t));
     live.delete(this.callId);
-    if (this.playing) {
-      const played = Math.max(0, Math.round(((Math.min(this.now(), this.playEndMs) - this.playing.startMs) * 8000) / 1000));
-      this.tape.mix(this.playing.startMs, this.playing.pcm.subarray(0, played));
+    const stopAt = Math.min(this.now(), this.playEndMs);
+    for (const seg of this.pending) {
+      if (seg.startMs >= stopAt) continue;
+      this.tape.mix(seg.startMs, seg.pcm.subarray(0, Math.round(((stopAt - seg.startMs) * 8000) / 1000)));
     }
+    this.pending = [];
     if (!this.ctx) return;
     try {
       await finishCall({

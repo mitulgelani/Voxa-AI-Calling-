@@ -8,6 +8,7 @@ import { VOICE_IDS } from '@/lib/voice/voices';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 30; // saving builds the persona's brief with the AI (a few seconds)
 
 const COOKIE = 'vd_owner';
 

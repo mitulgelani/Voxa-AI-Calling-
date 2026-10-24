@@ -74,7 +74,7 @@ export const CALL_METHOD = [
   '- Understand before you pitch. Ask about their situation, what is not working and what it costs them, one question at a time, and let them say it in their own words.',
   '- Pitch to what they told you: one or two points from the brief, tied to the exact thing they said, as outcomes for them, not a feature list.',
   '- As soon as you hear interest, ask for the next step with two concrete options, like "tomorrow at eleven or Thursday at four?", and confirm the details back once.',
-  '- Close cleanly: say what happens next in one sentence, thank them, say goodbye.',
+  '- Close cleanly: confirm only what was agreed (the day and time) and what the brief says happens next, in one sentence; never add arrival windows, durations or who will come unless the brief says so. Then thank them and say goodbye.',
   '- If the goal is not selling (feedback, support, a reminder, teaching), use the same skills: purpose first, listen more than you talk, steer kindly towards the goal.',
   '',
   '## Objections',
@@ -181,3 +181,20 @@ export function capReply(text: string, maxSentences = 10, maxWords = 170): strin
   const out = kept.join(' ');
   return endTag && !/\[END\]/i.test(out) ? out + endTag : out;
 }
+
+/**
+ * Output filter for the most common robotic tic: a stock opener ("Sure thing,", "Great!", "Certainly,",
+ * "I hear you,") at the start of a reply. Prompts alone do not remove it reliably, so strip it in code.
+ * Only removes an opener that is followed by punctuation, so "I understand the cost..." stays intact.
+ */
+const STOCK_OPENER =
+  /^\s*(?:(?:sure thing|certainly|absolutely|great|perfect|wonderful|awesome|excellent|fantastic|i hear you|i understand(?: your concern)?|thanks for (?:sharing|letting me know)(?: that)?|thank you for (?:sharing|letting me know)(?: that)?|बहुत बढ़िया|बढ़िया)\s*[,.!—–-]+\s*)+/i;
+
+export function humanizeReply(text: string): string {
+  const stripped = text.replace(STOCK_OPENER, '');
+  if (!stripped.trim() || stripped.length === text.length) return text;
+  return stripped.charAt(0).toUpperCase() + stripped.slice(1);
+}
+
+/** Short per-turn nudge, appended to what the caller said; the model weighs the latest message most. */
+export const TURN_NUDGE = 'React to exactly what they just said, in their mood, with no stock opener, then answer.';

@@ -1,5 +1,5 @@
 import { config } from './config.js';
-import { buildAgentPrompt, capReply } from './prompt.js';
+import { buildAgentPrompt, capReply, humanizeReply, TURN_NUDGE } from './prompt.js';
 
 const URL = 'https://openrouter.ai/api/v1/chat/completions';
 const FAST = 'google/gemini-2.5-flash';
@@ -32,7 +32,7 @@ export function systemPrompt(s: Script, lang: string, contact: { name: string; a
       '- If they do not want calls: apologise briefly, confirm they will not be called again, and end with [OPTOUT] [END].',
       '- If they ask to be called later: agree a time if they give one, thank them, and end with [CALLBACK] [END].',
     ],
-    reminder: `Remember: reply in ${LANG_LABEL[lang] ?? lang}, match your length to the question, react to exactly what they said, and sound like a real person on a phone call, never a script.`,
+    reminder: `Remember: reply in ${LANG_LABEL[lang] ?? lang}, match your length to the question, react to exactly what they said in their mood (no stock openers like "sure thing", "great", "certainly", "I hear you"), and sound like a real person on a phone call, never a script.`,
   });
 }
 
@@ -42,7 +42,10 @@ export async function reply(system: string, lines: Line[], languages: string[]):
   const started = Date.now();
   const messages = [
     { role: 'system', content: system },
-    ...lines.slice(-16).map((l) => ({ role: l.speaker === 'agent' ? 'assistant' : 'user', content: l.text + (l.interrupted ? ' (cut off)' : '') })),
+    ...lines.slice(-16).map((l, i, arr) => ({
+      role: l.speaker === 'agent' ? 'assistant' : 'user',
+      content: l.text + (l.interrupted ? ' (cut off)' : '') + (i === arr.length - 1 && l.speaker === 'customer' ? `\n(${TURN_NUDGE})` : ''),
+    })),
   ];
   const res = await fetch(URL, {
     method: 'POST',
@@ -58,7 +61,7 @@ export async function reply(system: string, lines: Line[], languages: string[]):
   const end = /\[END\]/.test(text);
   const optOut = /\[OPTOUT\]/.test(text);
   const callback = /\[CALLBACK\]/.test(text);
-  text = capReply(text);
+  text = humanizeReply(capReply(text));
   text = text.replace(/\[[A-Z]+(:[a-zA-Z-]+)?\]/g, '').replace(/[*_#`]/g, '').replace(/\s+/g, ' ').trim();
   return { text, end, optOut, callback, lang, ms: Date.now() - started, tokens: d.usage?.total_tokens ?? 0 };
 }

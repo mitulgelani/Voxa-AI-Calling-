@@ -104,3 +104,15 @@ test('reply cap keeps at most ten sentences, keeps the closing question, strips 
   const hiOut = capReply(hi);
   assert.ok(hiOut.split(/(?<=[।?])\s+/).length <= 11 && /\[END\]$/.test(hiOut), hiOut);
 });
+
+test('stock openers are stripped, real content is kept', async () => {
+  const { humanizeReply } = await import('../prompt.js');
+  assert.equal(humanizeReply('Sure thing—I\'m Kabir from SunKart.'), "I'm Kabir from SunKart.");
+  assert.equal(humanizeReply('Great, thanks for confirming. What roof do you have?'), 'Thanks for confirming. What roof do you have?');
+  assert.equal(humanizeReply('Perfect! Saturday at eleven it is.'), 'Saturday at eleven it is.');
+  assert.equal(humanizeReply('I hear you, we only call once.'), 'We only call once.');
+  assert.equal(humanizeReply('I understand the cost feels high.'), 'I understand the cost feels high.');
+  assert.equal(humanizeReply('Great!'), 'Great!');
+  assert.equal(humanizeReply('बहुत बढ़िया! आपका bill कितना आता है?'), 'आपका bill कितना आता है?');
+  assert.equal(humanizeReply('Greatly appreciated, see you then.'), 'Greatly appreciated, see you then.');
+});

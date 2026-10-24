@@ -17,7 +17,7 @@ const GROQ_FAST = process.env.GROQ_CHAT_MODEL || 'openai/gpt-oss-120b';
 const GROQ_BACKUP = 'openai/gpt-oss-20b';
 const KIE_FAST = 'deepseek-v4-1-flash';
 const HISTORY_TURNS = 10;
-const TURN_CHARS = 800;
+const TURN_CHARS = 1600; // long enough to keep a full ten-sentence answer in context, so it is not repeated
 
 export interface Msg {
   role: 'assistant' | 'user';

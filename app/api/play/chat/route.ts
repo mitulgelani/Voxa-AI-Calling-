@@ -15,7 +15,8 @@ const Body = z.object({
   event: z.enum(['reply', 'silence', 'start']).default('reply'),
   language: z.string().max(16).optional(),
   callerLanguage: z.string().max(30).optional(),
-  history: z.array(z.object({ role: z.enum(['agent', 'caller']), text: z.string().max(1200), interrupted: z.boolean().optional() })).max(40).default([]),
+  // agent turns can now be up to ten sentences, so allow long lines; the brain clips what it sends the model
+  history: z.array(z.object({ role: z.enum(['agent', 'caller']), text: z.string().max(4000), interrupted: z.boolean().optional() })).max(40).default([]),
 });
 
 export async function POST(req: Request) {

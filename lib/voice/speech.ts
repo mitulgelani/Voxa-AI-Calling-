@@ -27,7 +27,9 @@ export function hasEndToken(text: string): boolean {
 
 /** Split into sentences so the first one can start playing while the next synthesises. */
 export function splitSentences(text: string): string[] {
-  const parts = text.match(/[^.!?।。！？]+[.!?।。！？]+["')\]]*\s*|[^.!?।。！？]+$/g) || [];
+  // End punctuation only ends a sentence when a space or the end follows, so "1.8 lakh" and "₹4,999.50" stay
+  // whole. CJK full stops need no space.
+  const parts = text.split(/(?<=[.!?।]["')\]]*)\s+|(?<=[。！？])/);
   const out: string[] = [];
   for (const raw of parts) {
     const s = raw.trim();
@@ -36,7 +38,20 @@ export function splitSentences(text: string): string[] {
     if (out.length && out[out.length - 1].split(/\s+/).length <= 2) out[out.length - 1] += ` ${s}`;
     else out.push(s);
   }
-  return out;
+  // One synthesis request takes at most 600 characters: break any run-on sentence at a comma or a space.
+  return out.flatMap((s) => {
+    const pieces: string[] = [];
+    let rest = s;
+    while (rest.length > 280) {
+      const window = rest.slice(0, 280);
+      const cut = Math.max(window.lastIndexOf(', '), window.lastIndexOf('; '), window.lastIndexOf(' — '));
+      const at = cut > 80 ? cut + 1 : window.lastIndexOf(' ') > 80 ? window.lastIndexOf(' ') : 280;
+      pieces.push(rest.slice(0, at).trim());
+      rest = rest.slice(at).trim();
+    }
+    if (rest) pieces.push(rest);
+    return pieces;
+  });
 }
 
 const CJK = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/;

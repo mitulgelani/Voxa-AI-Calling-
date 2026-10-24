@@ -34,7 +34,7 @@ export async function POST(req: Request) {
 
     const lang = getLanguage(b.language || persona.language);
     const system = buildSystemPrompt({ name: persona.name, description: persona.brief || persona.description }, lang);
-    const reminder = `\n(Reply in ${lang.label}.${b.callerLanguage ? ` The caller's words look like ${b.callerLanguage}.` : ''})`;
+    const reminder = `\n(Reply in ${lang.label}: ${lang.style}${b.callerLanguage ? ` The caller's words look like ${b.callerLanguage}.` : ''})`;
     const text =
       b.event === 'start'
         ? `[The call just connected. Open the call in ${lang.label} as your brief and rules say: who you are, who you are calling from, that you are an AI assistant, and the reason for the call, then one easy question. Keep the opening to two or three sentences.]`

@@ -62,10 +62,10 @@ export function buildSystemPrompt(p: PersonaBrief, lang: Language): string {
     goal: p.goal ? clip(p.goal, 600) : undefined,
     steps: p.questions?.map((q) => clip(q.prompt, 200)),
     languageRules: [
-      `Speak ONLY ${lang.label}. ${lang.style} Every reply must be in ${lang.label}, even though these instructions are in English.`,
+      `Speak ONLY ${lang.label}. ${lang.style} Every reply must be in ${lang.label}, even though these instructions are in English, and in that script even when the person's words reach you in a different script.`,
       `If the person speaks a full sentence in another language, or asks you to talk in another language, switch to it from this reply on and begin your reply with [LANG:code], using one of: ${LANGUAGES.map((l) => `${l.id} (${l.label})`).join(', ')}. Indian callers speaking English → en-IN; mixing Hindi and English → hinglish. A few English words inside a Hindi sentence are NOT a switch.`,
     ].join('\n'),
-    reminder: `Remember: reply in ${lang.label}, and match your length to the question.`,
+    reminder: `Remember: reply in ${lang.label}. ${lang.style} Match your length to the question.`,
   });
 }
 

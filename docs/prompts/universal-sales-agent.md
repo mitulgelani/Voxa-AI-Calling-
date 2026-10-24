@@ -11,6 +11,8 @@ Model settings that matter as much as the words:
 - Allow enough output for 10 spoken sentences: about 700 tokens, or about 1,400 for reasoning models such as gpt-oss (with reasoning effort low).
 - Speak the reply sentence by sentence, starting text-to-speech on the first sentence while the rest are generated, so long answers start as fast as short ones.
 - Stop speaking the moment the caller talks, and send the cut-off line back marked "(cut off)".
+- Keep the `# How you work` part first and identical for every call. Providers cache a repeated prompt start: on Groq, cached tokens cost half and don't count against rate limits, which helps a free-tier key last through a call.
+- Back the length rule with a hard cap in code (VaniDial uses `capReply`: at most 10 sentences and about 170 words, keeping the closing question). Models overshoot sometimes, especially in Hindi.
 
 ---
 

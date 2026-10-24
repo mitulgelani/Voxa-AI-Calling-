@@ -54,7 +54,7 @@ export const LANGUAGES: Language[] = [
     bridges: ['Hmm.', 'Right.', 'Okay.', 'Sure.'],
     sorry: 'Sorry, could you please say that again?',
     sample: "Hi, I'm {name}. This is how I'll sound on your calls.",
-    style: 'Speak friendly Indian English, the way people talk on calls in India.',
+    style: 'Speak friendly Indian English, the way people talk on calls in India: relaxed and warm, with natural touches like "actually", "basically" or "no problem" now and then.',
   },
   {
     id: 'en-GB', label: 'English (UK)', native: 'English', speech: 'en-GB', whisper: 'en',
@@ -70,7 +70,7 @@ export const LANGUAGES: Language[] = [
     bridges: ['हम्म।', 'अच्छा।', 'जी।', 'ठीक है।'],
     sorry: 'माफ़ कीजिए, क्या आप फिर से बोल सकते हैं?',
     sample: 'नमस्ते, मैं {name} हूँ। आपकी कॉल पर मेरी आवाज़ ऐसी सुनाई देगी।',
-    style: 'Speak everyday spoken Hindi in Devanagari script, simple and polite, not formal or textbook Hindi. Use आप.',
+    style: 'Speak everyday spoken Hindi in Devanagari script, simple and polite, not formal or textbook Hindi. Use आप. Keep common English words (bill, EMI, appointment, okay) in English, and use natural markers like जी, अच्छा, देखिए now and then.',
   },
   {
     id: 'hinglish', label: 'Hinglish', native: 'Hindi + English', speech: 'hi-IN', whisper: 'hi',
@@ -79,7 +79,7 @@ export const LANGUAGES: Language[] = [
     sorry: 'Sorry, क्या आप एक बार फिर बोल सकते हैं?',
     sample: 'Hi, मैं {name} हूँ। आपकी calls पर मेरी आवाज़ ऐसी सुनाई देगी।',
     style:
-      'Speak Hinglish like urban Indians on a phone call: Hindi sentences in Devanagari script, with common English words (call, time, okay, problem, order, payment) kept in English letters.',
+      'Speak Hinglish like urban Indians on a phone call: Hindi sentences in Devanagari script, with common English words (call, time, okay, problem, order, payment) kept in English letters. Sound casual and warm, with markers like अच्छा, हाँ, देखिए, मतलब now and then.',
   },
   {
     id: 'gu-IN', label: 'Gujarati', native: 'ગુજરાતી', speech: 'gu-IN', whisper: 'gu',
@@ -87,7 +87,7 @@ export const LANGUAGES: Language[] = [
     bridges: ['હમ્મ.', 'સારું.', 'હા.', 'બરાબર.'],
     sorry: 'માફ કરશો, તમે ફરીથી કહી શકશો?',
     sample: 'નમસ્તે, હું {name} છું. તમારા કૉલ પર મારો અવાજ આવો સંભળાશે.',
-    style: 'Speak everyday spoken Gujarati in Gujarati script.',
+    style: 'Speak everyday spoken Gujarati in Gujarati script, warm and simple, not formal. Keep common English words (bill, appointment, okay) in English, and use markers like હા, સારું, જુઓ now and then.',
   },
   {
     id: 'mr-IN', label: 'Marathi', native: 'मराठी', speech: 'mr-IN', whisper: 'mr',

@@ -32,7 +32,7 @@ export function systemPrompt(s: Script, lang: string, contact: { name: string; a
       '- If they do not want calls: apologise briefly, confirm they will not be called again, and end with [OPTOUT] [END].',
       '- If they ask to be called later: agree a time if they give one, thank them, and end with [CALLBACK] [END].',
     ],
-    reminder: `Remember: reply in ${LANG_LABEL[lang] ?? lang}, and match your length to the question.`,
+    reminder: `Remember: reply in ${LANG_LABEL[lang] ?? lang}, match your length to the question, react to exactly what they said, and sound like a real person on a phone call, never a script.`,
   });
 }
 

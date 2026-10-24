@@ -16,8 +16,8 @@ const GROQ_CHAT_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const GROQ_FAST = process.env.GROQ_CHAT_MODEL || 'openai/gpt-oss-120b';
 const GROQ_BACKUP = 'openai/gpt-oss-20b';
 const KIE_FAST = 'deepseek-v4-1-flash';
-const HISTORY_TURNS = 10;
-const TURN_CHARS = 1600; // long enough to keep a full ten-sentence answer in context, so it is not repeated
+const HISTORY_TURNS = 8; // enough context for a sales call; fewer tokens per turn keeps a free-tier key under its per-minute limit
+const TURN_CHARS = 1100; // keeps most of a long answer in context without resending all of it every turn
 
 export interface Msg {
   role: 'assistant' | 'user';

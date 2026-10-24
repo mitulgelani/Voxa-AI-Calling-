@@ -1,5 +1,5 @@
 import { config } from './config.js';
-import { buildAgentPrompt } from './prompt.js';
+import { buildAgentPrompt, capReply } from './prompt.js';
 
 const URL = 'https://openrouter.ai/api/v1/chat/completions';
 const FAST = 'google/gemini-2.5-flash';
@@ -58,6 +58,7 @@ export async function reply(system: string, lines: Line[], languages: string[]):
   const end = /\[END\]/.test(text);
   const optOut = /\[OPTOUT\]/.test(text);
   const callback = /\[CALLBACK\]/.test(text);
+  text = capReply(text);
   text = text.replace(/\[[A-Z]+(:[a-zA-Z-]+)?\]/g, '').replace(/[*_#`]/g, '').replace(/\s+/g, ' ').trim();
   return { text, end, optOut, callback, lang, ms: Date.now() - started, tokens: d.usage?.total_tokens ?? 0 };
 }

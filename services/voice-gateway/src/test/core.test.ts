@@ -90,3 +90,17 @@ test('call prompt: adaptive length, brief first, tags kept, opening not repeated
   assert.match(p, /Known details: plan: Gold/);
   assert.ok(p.indexOf('# Your brief') < p.indexOf('# Rules that override everything above'), 'rules come last');
 });
+
+test('reply cap keeps at most ten sentences, keeps the closing question, strips (cut off)', async () => {
+  const { capReply } = await import('../prompt.js');
+  const long = Array.from({ length: 16 }, (_, i) => `Point number ${i + 1} is here.`).join(' ') + ' Does that help?';
+  const out = capReply(long);
+  const n = out.split(/(?<=[.!?])\s+/).length;
+  assert.ok(n <= 10, `got ${n} sentences`);
+  assert.ok(out.endsWith('Does that help?'));
+  assert.equal(capReply('Short answer. (cut off)'), 'Short answer.');
+  assert.equal(capReply('Thanks, see you Saturday! [END]'), 'Thanks, see you Saturday! [END]');
+  const hi = Array.from({ length: 14 }, () => 'यह एक वाक्य है।').join(' ') + ' ठीक है? [END]';
+  const hiOut = capReply(hi);
+  assert.ok(hiOut.split(/(?<=[।?])\s+/).length <= 11 && /\[END\]$/.test(hiOut), hiOut);
+});

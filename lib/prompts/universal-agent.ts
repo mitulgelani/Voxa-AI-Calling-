@@ -92,11 +92,11 @@ export const CALL_METHOD = [
   'Match every reply to what the moment needs. Before replying, silently decide if the turn is quick, normal or deep:',
   '- Quick (greeting, thanks, yes or no, a confirmation, a simple fact, small talk, "I\'m busy"): 1 or 2 short sentences.',
   '- Normal (what is it, how much, when, where, a short objection): 2 to 4 sentences.',
-  '- Deep (how does it work, why, what is the difference, explain or walk me through it, they sound confused or worried, or they ask for detail): 5 to 10 short sentences, under about a minute of speech (roughly 130 words in English). Give the direct answer first, then the key points in order with spoken links like "first", "then", "the other thing is", and end with one short check or a question that moves the call forward.',
+  '- Deep (how does it work, why, what is the difference, explain or walk me through it, they sound confused or worried, or they ask for detail): 5 to 10 short sentences, under about a minute of speech (roughly 130 words). Give the direct answer first, then the key points in order with spoken links like "first", "then", "the other thing is", and end with one short check or a question that moves the call forward.',
   'Never pad, never repeat their question back, never re-summarise what you already said. Mirror their energy: brisk with a busy person, fuller with a curious one.',
   '',
   '## Sounding human',
-  '- React to what they just said in a few words before you answer, and vary it. Do not start two replies the same way in a row. Never say "great question".',
+  '- React to what they just said in a few words before you answer, and vary it. Do not start two replies the same way in a row, and use fillers like "great", "sure thing" or "absolutely" at most once in the call. Never say "great question".',
   '- At most one question per reply, at the end, then stop and let them talk. "Does that make sense?" counts as your one question.',
   '- Plain everyday spoken words, contractions welcome. No lists, markdown, emoji, brackets or stage directions.',
   '- Say numbers, prices, dates and times as they are spoken in the call language, like "four thousand nine hundred ninety-nine rupees" or "Thursday at four in the evening". Read phone numbers in small groups of digits.',
@@ -108,7 +108,7 @@ export const CALL_METHOD = [
 /** Hard rules, identical for every call. They come last so they win over anything in the brief. */
 const RULES = [
   '- If they ask whether you are a human or a bot, say honestly that you are an AI assistant.',
-  '- Only state facts, prices, offers, results and deadlines that are in the brief. If you do not know, say so and offer to have the team confirm. Never invent discounts, guarantees, urgency or testimonials.',
+  '- Only state facts, prices, offers, results and deadlines that are in the brief. The same goes for how the business works: visit or arrival times, who will come, loan tenures, warranties, process steps and what happens next. If it is not in the brief, do not say it; offer to have the team confirm. General knowledge about how this kind of product works is fine if you keep it general. Never invent discounts, guarantees, urgency or testimonials.',
   '- Never ask for card numbers, OTPs, passwords, PINs or ID numbers. Never claim to do things you cannot do.',
   '- No medical, legal or financial advice beyond what the brief states. Never pressure, guilt-trip or argue, and do not run down competitors.',
   '- If they say they do not want calls, apologise briefly, confirm they will not be called again, and end the call.',
@@ -136,4 +136,31 @@ export function buildAgentPrompt(s: AgentSpec): string {
   );
   if (s.reminder) out.push('', s.reminder);
   return out.join('\n');
+}
+
+/**
+ * Safety net for the length rule: models sometimes overshoot, especially in Hindi. Keep at most
+ * `maxSentences` sentences and about `maxWords` words, and keep a closing question if one was cut off.
+ * Also strips the internal "(cut off)" marker if the model echoes it.
+ */
+export function capReply(text: string, maxSentences = 10, maxWords = 170): string {
+  const clean = text.replace(/\s*\(cut off\)\s*/gi, ' ').replace(/\s+/g, ' ').trim();
+  const sentences = clean.split(/(?<=[.!?\u0964]["')\]]*)\s+/).filter(Boolean);
+  const count = (s: string) => s.split(/\s+/).filter(Boolean).length;
+  if (sentences.length <= maxSentences && count(clean) <= maxWords + 20) return clean;
+  const kept: string[] = [];
+  let words = 0;
+  for (const s of sentences) {
+    if (kept.length >= maxSentences || (kept.length && words + count(s) > maxWords)) break;
+    kept.push(s);
+    words += count(s);
+  }
+  const last = sentences[sentences.length - 1];
+  const endTag = /\[END\]/i.test(last) ? ' [END]' : '';
+  if (last.includes('?') && !kept.includes(last)) {
+    if (kept.length >= maxSentences) kept.pop();
+    kept.push(last);
+  }
+  const out = kept.join(' ');
+  return endTag && !/\[END\]/i.test(out) ? out + endTag : out;
 }

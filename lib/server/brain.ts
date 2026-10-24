@@ -1,6 +1,6 @@
 import 'server-only';
 import { serverEnv } from '@/lib/server-env';
-import { BRIEF_BUILDER_PROMPT, briefBuilderInput, buildAgentPrompt } from '@/lib/prompts/universal-agent';
+import { BRIEF_BUILDER_PROMPT, briefBuilderInput, buildAgentPrompt, capReply } from '@/lib/prompts/universal-agent';
 import { LANGUAGES, getLanguage, matchesScript, parseLanguageTag, type Language } from '@/lib/voice/languages';
 
 /**
@@ -239,6 +239,7 @@ export async function think(system: string, history: Msg[], text: string, langua
       const switched = parseLanguageTag(reply);
       const target = switched || getLanguage(languageId);
       reply = reply.replace(/\[LANG:[^\]]*\]/gi, '').trim();
+      reply = capReply(reply);
       if (reply && !matchesScript(reply, target.id)) {
         try {
           const fixed = await call(
